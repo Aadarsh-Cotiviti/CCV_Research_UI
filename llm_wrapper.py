@@ -5,6 +5,8 @@ from openai import AzureOpenAI
 from dotenv import load_dotenv
 load_dotenv()
 
+import requests
+
 
 # Map each model to its deployment name, API key, and endpoint
 MODEL_CONFIGS = {
@@ -44,9 +46,45 @@ MODEL_CONFIGS = {
         "endpoint": os.getenv("AZURE_OPENAI_ENDPOINT_GPT_5_NANO"),
         "api_version": "2025-01-01-preview"
     },
+    "medgemma-27b-multimodal7": {
+        "url": os.getenv("MEDGEMMA_MODEL_URL"),
+        "api_key": "",  # Always blank
+        "verify_tls": True
+    },
 }
 
+
 def query_llm(messages, model="gpt-4.1"):
+    if model == "medgemma-27b-multimodal7":
+        config = MODEL_CONFIGS[model]
+        url = config["url"]
+        api_key = config["api_key"]
+        verify_tls = config["verify_tls"]
+        def _chat_headers():
+            h = {"Accept": "application/json"}
+            if api_key:
+                h["Authorization"] = f"Bearer {api_key}"
+            return h
+        obj = {"messages": messages}
+        timeout = 120
+        r = requests.post(
+            url,
+            json=obj,
+            headers=_chat_headers(),
+            timeout=timeout,
+            verify=verify_tls,
+        )
+        try:
+            data = r.json()
+        except Exception:
+            return f"[MedGEMMA Error] {r.status_code}: {r.text}"
+        # Try to extract response in OpenAI style, fallback to raw text
+        if "choices" in data and data["choices"] and "message" in data["choices"][0]:
+            return data["choices"][0]["message"].get("content", str(data))
+        elif "output" in data:
+            return data["output"]
+        return str(data)
+    # Default: OpenAI/Azure models
     config = MODEL_CONFIGS.get(model)
     if not config or not config["api_key"] or not config["endpoint"]:
         raise ValueError(f"Missing API key or endpoint for model: {model}")

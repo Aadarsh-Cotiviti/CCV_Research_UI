@@ -1,3 +1,12 @@
+# Create a new session by inserting a dummy system message
+def create_session(session_id, topic, persona="Analysts"):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        INSERT INTO interactions (session_id, topic, persona, question, response)
+        VALUES (?, ?, ?, ?, ?)
+    """, (session_id, topic, persona, "", ""))
+    conn.commit()
+    conn.close()
 import sqlite3
 
 DB_PATH = "interactions2.db"
@@ -54,5 +63,14 @@ def rename_session(session_id, new_topic):
     conn.execute("""
         UPDATE interactions SET topic = ? WHERE session_id = ?
     """, (new_topic, session_id))
+    conn.commit()
+    conn.close()
+
+# Delete all interactions for a session
+def delete_session(session_id):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        DELETE FROM interactions WHERE session_id = ?
+    """, (session_id,))
     conn.commit()
     conn.close()

@@ -1,3 +1,7 @@
 streamlit
 openai
 sqlite3
+requests
+pandas
+openpyxl
+reportlab
