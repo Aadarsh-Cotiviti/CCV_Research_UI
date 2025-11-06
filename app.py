@@ -2,7 +2,8 @@ import streamlit as st
 import uuid
 from PIL import Image
 from llm_wrapper import query_llm
-from db import init_db, save_interaction, get_sessions, get_session_history, rename_session
+from db import init_db, save_interaction, get_sessions, get_session_history, rename_session, delete_session, create_session
+import apc_research
 
 # Initialize DB
 init_db()
@@ -110,7 +111,10 @@ if "model" not in st.session_state:
 if "pending_user_input" not in st.session_state:
     st.session_state.pending_user_input = None
 
-# Sidebar: Logo + Research topics + model + persona selector
+if "app_mode" not in st.session_state:
+    st.session_state.app_mode = "Chat"
+
+# Sidebar: Logo + Navigation + Research topics + model + persona selector
 with st.sidebar:
     st.markdown("<div style='text-align: center; padding-bottom: 10px;'>", unsafe_allow_html=True)
     try:
@@ -120,87 +124,150 @@ with st.sidebar:
         st.warning("Logo image not found or failed to load.")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.title("📚 Research Topics")
-    sessions = get_sessions()
+    # Navigation
+    st.markdown("### 🧭 Navigation")
+    
+    # Add custom CSS for radio button labels
+    st.markdown("""
+        <style>
+            .stRadio > label {
+                color: #ffffff !important;
+            }
+            .stRadio div[role="radiogroup"] label {
+                color: #ffffff !important;
+            }
+            .stRadio div[role="radiogroup"] label p {
+                color: #ffffff !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    app_mode = st.radio(
+        "Select Mode",
+        ["💬 Chat Research", "🏥 APC Research"],
+        label_visibility="collapsed"
+    )
+    
+    if app_mode == "💬 Chat Research":
+        st.session_state.app_mode = "Chat"
+    else:
+        st.session_state.app_mode = "APC"
+    
+    st.markdown("---")
 
-    for sid, topic in sessions:
-        col1, col2 = st.columns([0.8, 0.2])
-        if col1.button(topic, key=f"load_{sid}"):
-            st.session_state.session_id = sid
-            st.session_state.topic = topic
-            st.session_state.messages = get_session_history(sid)
+    # Only show chat-specific sidebar content if in Chat mode
+    if st.session_state.app_mode == "Chat":
+        st.title("📚 Research Topics")
+        # Button to add a new session
+        if st.button("➕ New Research Session", key="add_new_session"):
+            new_session_id = str(uuid.uuid4())
+            new_topic = "New Research"
+            create_session(new_session_id, new_topic, persona=st.session_state.get("persona", "Analysts"))
+            st.session_state.session_id = new_session_id
+            st.session_state.topic = new_topic
+            st.session_state.messages = [{
+                "role": "system",
+                "content": "You are a helpful assistant with the persona of a CCV Researcher."
+            }]
+            st.rerun()
 
-        if col2.button("✏️", key=f"rename_{sid}"):
-            st.session_state.rename_target = sid
-            st.session_state.rename_value = topic
+        sessions = get_sessions()
 
-    if "rename_target" in st.session_state:
-        with st.form(key="rename_form"):
-            new_name = st.text_input("Rename topic to:", value=st.session_state.rename_value)
-            submitted = st.form_submit_button("Save")
-            if submitted:
-                rename_session(st.session_state.rename_target, new_name)
-                if st.session_state.session_id == st.session_state.rename_target:
-                    st.session_state.topic = new_name
-                del st.session_state.rename_target
-                del st.session_state.rename_value
+        for sid, topic in sessions:
+            col1, col2, col3 = st.columns([0.7, 0.15, 0.15])
+            if col1.button(topic, key=f"load_{sid}"):
+                st.session_state.session_id = sid
+                st.session_state.topic = topic
+                st.session_state.messages = get_session_history(sid)
+
+            if col2.button("✏️", key=f"rename_{sid}"):
+                st.session_state.rename_target = sid
+                st.session_state.rename_value = topic
+
+            if col3.button("🗑️", key=f"delete_{sid}"):
+                delete_session(sid)
+                # If the deleted session is the current one, reset to a new session
+                if st.session_state.session_id == sid:
+                    st.session_state.session_id = str(uuid.uuid4())
+                    st.session_state.topic = "New Research"
+                    st.session_state.messages = [{
+                        "role": "system",
+                        "content": "You are a helpful assistant with the persona of a CCV Researcher."
+                    }]
                 st.rerun()
 
-    st.markdown("---")
-    # Add gpt-5 models to the dropdown
-    model_options = [
-        "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4.1",
-        "gpt-5", "gpt-5-mini", "gpt-5-nano"
-    ]
-    if st.session_state.model not in model_options:
-        model_options.append(st.session_state.model)
-    st.session_state.model = st.selectbox(
-        "🧠 Model",
-        model_options,
-        index=model_options.index(st.session_state.model),
-        help="Select the LLM model."
-    )
+        if "rename_target" in st.session_state:
+            with st.form(key="rename_form"):
+                new_name = st.text_input("Rename topic to:", value=st.session_state.rename_value)
+                submitted = st.form_submit_button("Save")
+                if submitted:
+                    rename_session(st.session_state.rename_target, new_name)
+                    if st.session_state.session_id == st.session_state.rename_target:
+                        st.session_state.topic = new_name
+                    del st.session_state.rename_target
+                    del st.session_state.rename_value
+                    st.rerun()
 
-    st.markdown("---")
-    st.session_state.persona = st.selectbox("👤 User Persona", [
-        "Analysts", "CDAs", "SMEs", "Product Owners", "Data Analysts",
-        "Clinical Reviewers", "Audit Leads", "IT/Engineers"
-    ], index=[
-        "Analysts", "CDAs", "SMEs", "Product Owners", "Data Analysts",
-        "Clinical Reviewers", "Audit Leads", "IT/Engineers"
-    ].index(st.session_state.persona))
+        st.markdown("---")
+        # Add gpt-5 models to the dropdown
+        model_options = [
+            "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4.1",
+            "gpt-5", "gpt-5-mini", "gpt-5-nano",
+            "medgemma-27b-multimodal7"
+        ]
+        if st.session_state.model not in model_options:
+            model_options.append(st.session_state.model)
+        st.session_state.model = st.selectbox(
+            "🧠 Model",
+            model_options,
+            index=model_options.index(st.session_state.model),
+            help="Select the LLM model."
+        )
 
-# Topic display
-st.subheader(f"💬 Topic: {st.session_state.topic}")
+        st.markdown("---")
+        st.session_state.persona = st.selectbox("👤 User Persona", [
+            "Analysts", "CDAs", "SMEs", "Product Owners", "Data Analysts",
+            "Clinical Reviewers", "Audit Leads", "IT/Engineers"
+        ], index=[
+            "Analysts", "CDAs", "SMEs", "Product Owners", "Data Analysts",
+            "Clinical Reviewers", "Audit Leads", "IT/Engineers"
+        ].index(st.session_state.persona))
 
-# Display chat history
-for msg in st.session_state.messages[1:]:  # Skip system prompt
-    if msg["role"] == "user":
-        st.markdown(f'<div class="chat-bubble user-bubble">{msg["content"]}</div>', unsafe_allow_html=True)
-    elif msg["role"] == "assistant":
-        st.markdown(f'<div class="chat-bubble assistant-bubble">{msg["content"]}</div>', unsafe_allow_html=True)
+# Main content area - switch between Chat and APC modes
+if st.session_state.app_mode == "APC":
+    apc_research.render_apc_interface()
+else:
+    # Topic display
+    st.subheader(f"💬 Topic: {st.session_state.topic}")
 
-# Show pending user input and "Researching..." message
-if st.session_state.pending_user_input:
-    st.markdown(f'<div class="chat-bubble user-bubble">{st.session_state.pending_user_input}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="chat-bubble assistant-bubble">Researching...</div>', unsafe_allow_html=True)
+    # Display chat history
+    for msg in st.session_state.messages[1:]:  # Skip system prompt
+        if msg["role"] == "user":
+            st.markdown(f'<div class="chat-bubble user-bubble">{msg["content"]}</div>', unsafe_allow_html=True)
+        elif msg["role"] == "assistant":
+            st.markdown(f'<div class="chat-bubble assistant-bubble">{msg["content"]}</div>', unsafe_allow_html=True)
 
-# Input field at bottom (Enter to submit)
-st.markdown('<div class="bottom-input">', unsafe_allow_html=True)
-with st.form(key="chat_form", clear_on_submit=True):
-    user_input = st.text_input("Type a message", key="temp_input", label_visibility="collapsed", placeholder="Type a message...")
-    submitted = st.form_submit_button("Send")
+    # Show pending user input and "Researching..." message
+    if st.session_state.pending_user_input:
+        st.markdown(f'<div class="chat-bubble user-bubble">{st.session_state.pending_user_input}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="chat-bubble assistant-bubble">Researching...</div>', unsafe_allow_html=True)
 
-    if submitted and user_input:
-        st.session_state.pending_user_input = user_input
+    # Input field at bottom (Enter to submit)
+    st.markdown('<div class="bottom-input">', unsafe_allow_html=True)
+    with st.form(key="chat_form", clear_on_submit=True):
+        user_input = st.text_input("Type a message", key="temp_input", label_visibility="collapsed", placeholder="Type a message...")
+        submitted = st.form_submit_button("Send")
+
+        if submitted and user_input:
+            st.session_state.pending_user_input = user_input
+            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # If pending input exists, process it
+    if st.session_state.pending_user_input:
+        st.session_state.messages.append({"role": "user", "content": st.session_state.pending_user_input})
+        response = query_llm(st.session_state.messages, model=st.session_state.model)
+        st.session_state.messages.append({"role": "assistant", "content": response})
+        save_interaction(st.session_state.session_id, st.session_state.topic, st.session_state.persona, st.session_state.pending_user_input, response)
+        st.session_state.pending_user_input = None
         st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
-
-# If pending input exists, process it
-if st.session_state.pending_user_input:
-    st.session_state.messages.append({"role": "user", "content": st.session_state.pending_user_input})
-    response = query_llm(st.session_state.messages, model=st.session_state.model)
-    st.session_state.messages.append({"role": "assistant", "content": response})
-    save_interaction(st.session_state.session_id, st.session_state.topic, st.session_state.persona, st.session_state.pending_user_input, response)
-    st.session_state.pending_user_input = None
-    st.rerun()
