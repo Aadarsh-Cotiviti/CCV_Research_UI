@@ -18,6 +18,12 @@ def init_feedback_db():
             topic TEXT,
             ui_rating INTEGER,
             content_rating INTEGER,
+            section1_accuracy TEXT,
+            section2_accuracy TEXT,
+            section3_accuracy TEXT,
+            section4_accuracy TEXT,
+            section5_accuracy TEXT,
+            section6_accuracy TEXT,
             feedback_text TEXT,
             submitted_at TEXT NOT NULL
         )
@@ -26,7 +32,8 @@ def init_feedback_db():
     conn.commit()
     conn.close()
 
-def save_feedback(model_used, research_type, topic, ui_rating, content_rating, feedback_text):
+def save_feedback(model_used, research_type, topic, ui_rating, content_rating, 
+                  section_ratings, feedback_text):
     """Save feedback to database"""
     db_path = os.path.join(os.path.dirname(__file__), "feedback.db")
     conn = sqlite3.connect(db_path)
@@ -35,9 +42,19 @@ def save_feedback(model_used, research_type, topic, ui_rating, content_rating, f
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     cursor.execute("""
-        INSERT INTO feedback (timestamp, model_used, research_type, topic, ui_rating, content_rating, feedback_text, submitted_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (timestamp, model_used, research_type, topic, ui_rating, content_rating, feedback_text, timestamp))
+        INSERT INTO feedback (timestamp, model_used, research_type, topic, ui_rating, 
+                             content_rating, section1_accuracy, section2_accuracy, 
+                             section3_accuracy, section4_accuracy, section5_accuracy, 
+                             section6_accuracy, feedback_text, submitted_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (timestamp, model_used, research_type, topic, ui_rating, content_rating,
+          section_ratings.get('section1', 'Not Rated'),
+          section_ratings.get('section2', 'Not Rated'),
+          section_ratings.get('section3', 'Not Rated'),
+          section_ratings.get('section4', 'Not Rated'),
+          section_ratings.get('section5', 'Not Rated'),
+          section_ratings.get('section6', 'Not Rated'),
+          feedback_text, timestamp))
     
     conn.commit()
     conn.close()
@@ -209,7 +226,53 @@ def render_feedback_page():
         content_rating_value = rating_map[content_rating]
         
         st.markdown("---")
-        st.subheader("💬 Additional Comments")
+        st.subheader("� Section-Specific Accuracy (Optional)")
+        st.markdown("<p style='color: #b0b0b0; font-size: 0.9rem; margin-bottom: 15px;'>Rate the accuracy of each section in the generated output</p>", unsafe_allow_html=True)
+        
+        section_ratings = {}
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            section_ratings['section1'] = st.selectbox(
+                "Section 1: Code Description Analysis",
+                ["Not Rated", "✅ Yes", "⚠️ Maybe", "❌ No"],
+                help="Was this section accurate?"
+            )
+            
+            section_ratings['section2'] = st.selectbox(
+                "Section 2: Guideline Examination",
+                ["Not Rated", "✅ Yes", "⚠️ Maybe", "❌ No"],
+                help="Was this section accurate?"
+            )
+            
+            section_ratings['section3'] = st.selectbox(
+                "Section 3: Payment Rate Comparison",
+                ["Not Rated", "✅ Yes", "⚠️ Maybe", "❌ No"],
+                help="Was this section accurate?"
+            )
+        
+        with col2:
+            section_ratings['section4'] = st.selectbox(
+                "Section 4: Documentation Requirements",
+                ["Not Rated", "✅ Yes", "⚠️ Maybe", "❌ No"],
+                help="Was this section accurate?"
+            )
+            
+            section_ratings['section5'] = st.selectbox(
+                "Section 5: Modifier Analysis",
+                ["Not Rated", "✅ Yes", "⚠️ Maybe", "❌ No"],
+                help="Was this section accurate?"
+            )
+            
+            section_ratings['section6'] = st.selectbox(
+                "Section 6: Audit Strategy",
+                ["Not Rated", "✅ Yes", "⚠️ Maybe", "❌ No"],
+                help="Was this section accurate?"
+            )
+        
+        st.markdown("---")
+        st.subheader("�💬 Additional Comments")
         
         feedback_text = st.text_area(
             "Your Feedback (Optional)",
@@ -235,6 +298,7 @@ def render_feedback_page():
                     topic if topic else "Not specified",
                     ui_rating_value,
                     content_rating_value,
+                    section_ratings,
                     feedback_text if feedback_text else "No additional comments"
                 )
                 

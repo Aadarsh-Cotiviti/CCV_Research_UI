@@ -266,6 +266,25 @@ def render_apc_interface():
     # Add custom CSS for buttons and labels
     st.markdown("""
         <style>
+            /* Reduce spacing for info boxes */
+            .stAlert {
+                margin-top: 0.25rem !important;
+                margin-bottom: 0.25rem !important;
+                padding: 0.5rem 1rem !important;
+            }
+            
+            /* Reduce spacing around horizontal lines */
+            hr {
+                margin-top: 0.25rem !important;
+                margin-bottom: 0.25rem !important;
+            }
+            
+            /* Reduce spacing around subheaders */
+            h3 {
+                margin-top: 0.5rem !important;
+                margin-bottom: 0.5rem !important;
+            }
+            
             .stForm label {
                 color: #ffffff !important;
             }
@@ -496,6 +515,12 @@ def render_apc_interface():
     
     # STEP 3: Display Results
     if st.session_state.apc_step == 3 and "apc_analysis" in st.session_state:
+        # Add CSS to reduce spacing before Research Results
+        st.markdown("""
+            <style>
+                hr { margin: 0.5rem 0 !important; }
+            </style>
+        """, unsafe_allow_html=True)
         st.markdown("---")
         st.subheader("📊 Research Results")
         
@@ -538,6 +563,9 @@ def render_apc_interface():
         col2.metric("Model Used", analysis_data["model"])
         col3.metric("Generated", analysis_data["timestamp"])
         
+        # Reduce spacing before Analysis Report heading
+        st.markdown("<style>.stMarkdown h3:first-of-type { margin-top: 0.5rem !important; }</style>", unsafe_allow_html=True)
+        
         # Analysis content with larger font - render as markdown to preserve tables
         st.markdown("### Analysis Report")
         
@@ -566,8 +594,8 @@ def render_apc_interface():
                     color: #10a37f !important;
                     font-size: 1.8rem !important;
                     font-weight: bold !important;
-                    margin-top: 25px !important;
-                    margin-bottom: 15px !important;
+                    margin-top: 10px !important;
+                    margin-bottom: 10px !important;
                     padding-bottom: 8px !important;
                     border-bottom: 2px solid #10a37f !important;
                 }
@@ -575,8 +603,8 @@ def render_apc_interface():
                     color: #e0e0e0 !important;
                     font-size: 1.4rem !important;
                     font-weight: bold !important;
-                    margin-top: 20px !important;
-                    margin-bottom: 12px !important;
+                    margin-top: 12px !important;
+                    margin-bottom: 8px !important;
                 }
                 .stMarkdown strong {
                     color: #10a37f !important;
@@ -592,16 +620,75 @@ def render_apc_interface():
             </style>
         """, unsafe_allow_html=True)
         
+        # Initialize section accuracy tracking in session state
+        if "section_accuracy" not in st.session_state:
+            st.session_state.section_accuracy = {}
+        
         # Process and format the result to make sections stand out
         formatted_result = analysis_data["result"]
         
-        # Replace SECTION headers with H2 markdown for better styling
+        # Split content by sections
         import re
-        formatted_result = re.sub(r'^(SECTION \d+ - [^\n]+)', r'## \1', formatted_result, flags=re.MULTILINE)
-        formatted_result = re.sub(r'^(FINAL ASSESSMENT)', r'## \1', formatted_result, flags=re.MULTILINE)
+        section_pattern = r'(SECTION \d+ - [^\n]+)'
+        sections = re.split(section_pattern, formatted_result)
         
-        # Render the analysis result as markdown (preserves tables)
-        st.markdown(formatted_result)
+        # First part before any section
+        if sections[0].strip():
+            st.markdown(sections[0])
+        
+        # Process each section with accuracy toggle
+        for i in range(1, len(sections), 2):
+            if i < len(sections):
+                section_title = sections[i]
+                section_content = sections[i+1] if i+1 < len(sections) else ""
+                
+                # Extract section number
+                section_match = re.match(r'SECTION (\d+)', section_title)
+                section_num = section_match.group(1) if section_match else str((i+1)//2)
+                
+                # Create columns for section title and accuracy toggle
+                col_title, col_toggle = st.columns([3, 2])
+                
+                with col_title:
+                    st.markdown(f"## {section_title}")
+                
+                with col_toggle:
+                    # Display "Accurate?" label and inline buttons
+                    st.markdown("<p style='color: #b0b0b0; font-size: 0.85rem; margin-bottom: 0.25rem; margin-top: 1rem;'>Accurate?</p>", unsafe_allow_html=True)
+                    
+                    accuracy_key = f"section_{section_num}_accuracy"
+                    btn_col1, btn_col2, btn_col3 = st.columns(3)
+                    
+                    with btn_col1:
+                        if st.button("✅ Yes", key=f"{accuracy_key}_yes", use_container_width=True):
+                            st.session_state.section_accuracy[section_num] = "✅ Yes"
+                    with btn_col2:
+                        if st.button("⚠️ Maybe", key=f"{accuracy_key}_maybe", use_container_width=True):
+                            st.session_state.section_accuracy[section_num] = "⚠️ Maybe"
+                    with btn_col3:
+                        if st.button("❌ No", key=f"{accuracy_key}_no", use_container_width=True):
+                            st.session_state.section_accuracy[section_num] = "❌ No"
+                
+                # Display section content
+                # Convert markdown formatting for better display
+                formatted_content = re.sub(r'^(FINAL ASSESSMENT)', r'## \1', section_content, flags=re.MULTILINE)
+                st.markdown(formatted_content)
+        
+        # Handle FINAL ASSESSMENT if present
+        final_assessment_match = re.search(r'(FINAL ASSESSMENT[^\n]*)(.*)', formatted_result, re.DOTALL)
+        if final_assessment_match and 'SECTION' not in final_assessment_match.group(0).split('\n')[0]:
+            st.markdown(f"## {final_assessment_match.group(1)}")
+            st.markdown(final_assessment_match.group(2))
+        
+        # Display section accuracy summary if any sections were rated
+        if st.session_state.section_accuracy:
+            st.markdown("---")
+            st.subheader("📊 Section Accuracy Summary")
+            
+            summary_cols = st.columns(6)
+            for idx, (section_num, rating) in enumerate(st.session_state.section_accuracy.items()):
+                with summary_cols[idx % 6]:
+                    st.metric(f"Section {section_num}", rating)
         
         # Download options
         st.markdown("---")

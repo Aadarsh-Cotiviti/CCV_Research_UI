@@ -1,5 +1,7 @@
 import streamlit as st
 import uuid
+import os
+import base64
 from PIL import Image
 from llm_wrapper import query_llm
 from db import init_db, save_interaction, get_sessions, get_session_history, rename_session, delete_session, create_session
@@ -24,18 +26,55 @@ st.markdown("""
         }
 
         [data-testid="stHeader"] {
-            background-color: #1e1e1e !important;
-            border-bottom: 1px solid #333 !important;
+            display: none !important;
         }
-
-        [data-testid="stHeader"]::before {
-            content: "🧠 CCV Research AI";
-            font-size: 1.2rem;
-            font-weight: 600;
-            color: #e0e0e0;
-            position: absolute;
-            left: 1rem;
-            top: 0.75rem;
+        
+        /* Hide Streamlit toolbar and decorations */
+        [data-testid="stToolbar"] {
+            display: none !important;
+        }
+        
+        [data-testid="stDecoration"] {
+            display: none !important;
+        }
+        
+        [data-testid="stStatusWidget"] {
+            display: none !important;
+        }
+        
+        /* Remove all top spacing */
+        .main .block-container {
+            padding-top: 0 !important;
+            margin-top: 0 !important;
+        }
+        
+        .main {
+            padding-top: 0 !important;
+            margin-top: 0 !important;
+        }
+        
+        .stApp {
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+        }
+        
+        /* Remove spacing from first element */
+        .main .block-container > div:first-child {
+            padding-top: 0 !important;
+            margin-top: 0 !important;
+        }
+        
+        /* Main page logo styling */
+        .main-logo-container {
+            text-align: center;
+            padding: 0 0 0.5rem 0;
+            margin: 0 0 1rem 0;
+            border-bottom: 1px solid #333;
+        }
+        
+        .main-logo-container .stColumns {
+            padding-top: 0 !important;
+            margin-top: 0 !important;
         }
 
         .chat-bubble {
@@ -136,7 +175,7 @@ with st.sidebar:
     st.markdown("<div style='text-align: center; padding-bottom: 10px;'>", unsafe_allow_html=True)
     try:
         logo = Image.open("logo.png")
-        st.image(logo, width=180)
+        st.image(logo, width=240)
     except Exception as e:
         st.warning("Logo image not found or failed to load.")
     st.markdown("</div>", unsafe_allow_html=True)
@@ -267,6 +306,18 @@ with st.sidebar:
             "Analysts", "CDAs", "SMEs", "Product Owners", "Data Analysts",
             "Clinical Reviewers", "Audit Leads", "IT/Engineers"
         ].index(st.session_state.persona))
+
+# Main content area - Add large logo at the top using pure HTML
+try:
+    with open("logo.png", "rb") as f:
+        logo_base64 = base64.b64encode(f.read()).decode()
+    st.markdown(f"""
+        <div class="main-logo-container">
+            <img src="data:image/png;base64,{logo_base64}" style="max-width: 500px; width: 50%; height: auto; display: block; margin: 0 auto;">
+        </div>
+    """, unsafe_allow_html=True)
+except Exception as e:
+    st.markdown('<div class="main-logo-container"><div style="color: #e0e0e0; font-size: 2rem; font-weight: 600; text-align: center;">🧠 CCV Research AI</div></div>', unsafe_allow_html=True)
 
 # Main content area - switch between Chat, APC, and Feedback modes
 if st.session_state.show_feedback:
