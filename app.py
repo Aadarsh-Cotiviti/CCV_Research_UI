@@ -4,9 +4,11 @@ from PIL import Image
 from llm_wrapper import query_llm
 from db import init_db, save_interaction, get_sessions, get_session_history, rename_session, delete_session, create_session
 import apc_research
+from feedback import init_feedback_db, render_feedback_page
 
-# Initialize DB
+# Initialize DBs
 init_db()
+init_feedback_db()
 
 # Page config
 st.set_page_config(page_title="CCV Research AI", layout="wide")
@@ -90,6 +92,18 @@ st.markdown("""
             color: black !important;
             border: 1px solid #aaa !important;
         }
+        
+        /* Feedback button styling */
+        .stSidebar button[kind="secondary"] {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            border: 2px solid #000000 !important;
+            border-radius: 8px !important;
+            font-weight: bold !important;
+        }
+        .stSidebar button[kind="secondary"]:hover {
+            background-color: #f0f0f0 !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -113,6 +127,9 @@ if "pending_user_input" not in st.session_state:
 
 if "app_mode" not in st.session_state:
     st.session_state.app_mode = "Chat"
+
+if "show_feedback" not in st.session_state:
+    st.session_state.show_feedback = False
 
 # Sidebar: Logo + Navigation + Research topics + model + persona selector
 with st.sidebar:
@@ -142,16 +159,34 @@ with st.sidebar:
         </style>
     """, unsafe_allow_html=True)
     
+    # Determine the index for the radio button based on current mode
+    if st.session_state.show_feedback:
+        # When showing feedback, keep the previous selection highlighted
+        current_index = 0 if st.session_state.app_mode == "Chat" else 1
+    else:
+        current_index = 0 if st.session_state.app_mode == "Chat" else 1
+    
     app_mode = st.radio(
         "Select Mode",
         ["💬 Chat Research", "🏥 APC Research"],
+        index=current_index,
         label_visibility="collapsed"
     )
     
-    if app_mode == "💬 Chat Research":
-        st.session_state.app_mode = "Chat"
-    else:
-        st.session_state.app_mode = "APC"
+    # Only update mode and close feedback if user actually changed the selection
+    new_mode = "Chat" if app_mode == "💬 Chat Research" else "APC"
+    if new_mode != st.session_state.app_mode:
+        st.session_state.app_mode = new_mode
+        st.session_state.show_feedback = False  # Close feedback when switching modes
+        st.rerun()
+    
+    st.markdown("---")
+    
+    # Feedback button at the bottom of sidebar
+    st.markdown("### 💭 Feedback")
+    if st.button("📝 Give Feedback", use_container_width=True):
+        st.session_state.show_feedback = True
+        st.rerun()
     
     st.markdown("---")
 
@@ -233,8 +268,10 @@ with st.sidebar:
             "Clinical Reviewers", "Audit Leads", "IT/Engineers"
         ].index(st.session_state.persona))
 
-# Main content area - switch between Chat and APC modes
-if st.session_state.app_mode == "APC":
+# Main content area - switch between Chat, APC, and Feedback modes
+if st.session_state.show_feedback:
+    render_feedback_page()
+elif st.session_state.app_mode == "APC":
     apc_research.render_apc_interface()
 else:
     # Topic display
