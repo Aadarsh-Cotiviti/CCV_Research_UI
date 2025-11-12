@@ -31,6 +31,7 @@ Complete the following analysis sections:
 
 SECTION 1 - Code Description Analysis
 - Review detailed descriptions for {target_cpt} and neighboring codes
+- List neighboring codes in ASCENDING ORDER (from lowest to highest code number)
 - Detect re-coding possibilities considering:
   • Procedural approach variations (open, percutaneous, laparoscopic)
   • Anatomical location differences
@@ -44,11 +45,14 @@ SECTION 2 - Guideline Examination
 
 SECTION 3 - Payment Rate Comparison
 - Evaluate APC assignments and payment rates for {target_cpt} and related codes
+- Present the comparison in a TABLE format with the following columns:
+  | CPT Code | APC Code | Payment Rate | Status | Notes |
 - Categorize findings:
   • Matching rates → No audit opportunity
   • Differing rates → Investigate further
 - Track rate consistency across quarters/years within audit window
 - Flag potential underpayment or overpayment patterns
+- Use markdown table format for clear presentation
 
 SECTION 4 - Device Code Analysis
 - Confirm if {target_cpt} involves medical devices
@@ -76,7 +80,7 @@ FINAL ASSESSMENT
 - Assign priority level (Critical/Moderate/Low)
 - Recommend validation steps
 
-Structure output with clear headings and organized bullet points.
+Structure output with clear headings and organized bullet points. Use markdown tables where specified.
 """
     return research_query
 
@@ -447,9 +451,70 @@ def render_apc_interface():
         col2.metric("Model Used", analysis_data["model"])
         col3.metric("Generated", analysis_data["timestamp"])
         
-        # Analysis content
+        # Analysis content with larger font - render as markdown to preserve tables
         st.markdown("### Analysis Report")
-        st.markdown(analysis_data["result"])
+        
+        # Add custom CSS for larger markdown content
+        st.markdown("""
+            <style>
+                .stMarkdown p, .stMarkdown li, .stMarkdown td {
+                    font-size: 1.1rem !important;
+                    line-height: 1.6 !important;
+                }
+                .stMarkdown table {
+                    font-size: 1.05rem !important;
+                    margin: 15px 0 !important;
+                }
+                .stMarkdown th {
+                    background-color: #10a37f !important;
+                    color: white !important;
+                    padding: 10px !important;
+                    font-weight: bold !important;
+                }
+                .stMarkdown td {
+                    padding: 8px !important;
+                    border: 1px solid #555 !important;
+                }
+                .stMarkdown h1, .stMarkdown h2 {
+                    color: #10a37f !important;
+                    font-size: 1.8rem !important;
+                    font-weight: bold !important;
+                    margin-top: 25px !important;
+                    margin-bottom: 15px !important;
+                    padding-bottom: 8px !important;
+                    border-bottom: 2px solid #10a37f !important;
+                }
+                .stMarkdown h3 {
+                    color: #e0e0e0 !important;
+                    font-size: 1.4rem !important;
+                    font-weight: bold !important;
+                    margin-top: 20px !important;
+                    margin-bottom: 12px !important;
+                }
+                .stMarkdown strong {
+                    color: #10a37f !important;
+                    font-weight: bold !important;
+                }
+                .stMarkdown ul, .stMarkdown ol {
+                    margin-left: 20px !important;
+                    margin-bottom: 15px !important;
+                }
+                .stMarkdown li {
+                    margin-bottom: 8px !important;
+                }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        # Process and format the result to make sections stand out
+        formatted_result = analysis_data["result"]
+        
+        # Replace SECTION headers with H2 markdown for better styling
+        import re
+        formatted_result = re.sub(r'^(SECTION \d+ - [^\n]+)', r'## \1', formatted_result, flags=re.MULTILINE)
+        formatted_result = re.sub(r'^(FINAL ASSESSMENT)', r'## \1', formatted_result, flags=re.MULTILINE)
+        
+        # Render the analysis result as markdown (preserves tables)
+        st.markdown(formatted_result)
         
         # Download options
         st.markdown("---")
