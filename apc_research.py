@@ -266,30 +266,97 @@ def render_apc_interface():
     # Add custom CSS for buttons and labels
     st.markdown("""
         <style>
-            .stForm button[type="submit"] {
-                background-color: #000000 !important;
-                color: white !important;
-            }
-            .stForm button[type="submit"]:hover {
-                background-color: #333333 !important;
-                color: white !important;
-            }
             .stForm label {
                 color: #ffffff !important;
             }
-            .cpt-code-button {
-                background-color: #10a37f !important;
-                color: white !important;
-                padding: 10px 15px;
-                margin: 5px;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                width: 100%;
-                text-align: left;
+            /* Form submit buttons - MOST SPECIFIC FIRST */
+            .stForm button[type="submit"],
+            form button[type="submit"],
+            div[data-testid="stForm"] button,
+            .stForm .stFormSubmitButton > button {
+                background-color: #ffffff !important;
+                color: #000000 !important;
+                border: 2px solid #000000 !important;
+                border-radius: 8px !important;
+                padding: 12px 20px !important;
+                font-weight: bold !important;
+                font-size: 1.1rem !important;
             }
-            .cpt-code-button:hover {
-                background-color: #0d8566 !important;
+            .stForm button[type="submit"]:hover,
+            form button[type="submit"]:hover,
+            div[data-testid="stForm"] button:hover,
+            .stForm .stFormSubmitButton > button:hover {
+                background-color: #f0f0f0 !important;
+                color: #000000 !important;
+                border: 2px solid #000000 !important;
+            }
+            /* Force text color inside form buttons */
+            .stForm button[type="submit"] *,
+            form button[type="submit"] *,
+            div[data-testid="stForm"] button *,
+            .stForm .stFormSubmitButton > button * {
+                color: #000000 !important;
+            }
+            /* ALL BUTTONS - White background with black text using multiple selectors */
+            .stButton > button,
+            button[data-testid="baseButton-primary"],
+            button[data-testid="baseButton-secondary"],
+            div[data-testid="stButton"] > button,
+            button[kind="primary"],
+            button[kind="secondary"] {
+                background-color: #ffffff !important;
+                color: #000000 !important;
+                border: 2px solid #000000 !important;
+                border-radius: 8px !important;
+                padding: 12px 20px !important;
+                font-weight: bold !important;
+                font-size: 1.1rem !important;
+                transition: background-color 0.3s !important;
+            }
+            /* Button text and children */
+            .stButton > button *,
+            button[data-testid="baseButton-primary"] *,
+            button[data-testid="baseButton-secondary"] *,
+            div[data-testid="stButton"] > button * {
+                color: #000000 !important;
+            }
+            /* Hover states */
+            .stButton > button:hover,
+            button[data-testid="baseButton-primary"]:hover,
+            button[data-testid="baseButton-secondary"]:hover,
+            div[data-testid="stButton"] > button:hover,
+            button[kind="primary"]:hover,
+            button[kind="secondary"]:hover {
+                background-color: #f0f0f0 !important;
+                border: 2px solid #000000 !important;
+                color: #000000 !important;
+            }
+            /* Active/Focus states */
+            .stButton > button:active,
+            .stButton > button:focus,
+            button[data-testid="baseButton-primary"]:active,
+            button[data-testid="baseButton-secondary"]:active {
+                background-color: #e0e0e0 !important;
+                border: 2px solid #000000 !important;
+                color: #000000 !important;
+                box-shadow: none !important;
+            }
+            /* Download buttons */
+            .stDownloadButton > button,
+            div[data-testid="stDownloadButton"] > button {
+                background-color: #ffffff !important;
+                color: #000000 !important;
+                border: 2px solid #000000 !important;
+                border-radius: 8px !important;
+                padding: 12px 20px !important;
+                font-weight: bold !important;
+                font-size: 1.1rem !important;
+            }
+            .stDownloadButton > button:hover,
+            div[data-testid="stDownloadButton"] > button:hover {
+                background-color: #f0f0f0 !important;
+                color: #000000 !important;
+                border: 2px solid #000000 !important;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -351,12 +418,12 @@ def render_apc_interface():
         for idx, cpt_info in enumerate(st.session_state.generated_cpts):
             col1, col2 = st.columns([1, 4])
             with col1:
-                if st.button(f"**{cpt_info['code']}**", key=f"cpt_btn_{idx}", use_container_width=True):
+                if st.button(cpt_info['code'], key=f"cpt_btn_{idx}", use_container_width=True):
                     st.session_state.selected_cpt = cpt_info['code']
                     st.session_state.apc_step = 2
                     st.rerun()
             with col2:
-                st.markdown(f"<div style='padding: 10px; color: #e0e0e0;'>{cpt_info['description']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='padding: 10px 20px; color: #e0e0e0; font-size: 1rem;'>{cpt_info['description']}</div>", unsafe_allow_html=True)
         
         st.markdown("---")
         if st.button("← Back to Topic Input"):
@@ -437,11 +504,31 @@ def render_apc_interface():
         # Metadata with custom styling
         st.markdown("""
             <style>
-                div[data-testid="stMetricValue"] {
-                    color: #e0e0e0 !important;
+                /* Metric values and labels - force white */
+                div[data-testid="stMetricValue"],
+                div[data-testid="stMetricValue"] *,
+                [data-testid="stMetricValue"],
+                [data-testid="stMetricValue"] * {
+                    color: #ffffff !important;
+                    font-weight: bold !important;
                 }
-                div[data-testid="stMetricLabel"] {
-                    color: #e0e0e0 !important;
+                div[data-testid="stMetricLabel"],
+                div[data-testid="stMetricLabel"] *,
+                [data-testid="stMetricLabel"],
+                [data-testid="stMetricLabel"] * {
+                    color: #ffffff !important;
+                    font-weight: bold !important;
+                }
+                /* Alternative metric selectors */
+                .stMetric > div > div {
+                    color: #ffffff !important;
+                }
+                .stMetric label {
+                    color: #ffffff !important;
+                    font-weight: bold !important;
+                }
+                .stMetric [data-testid="metric-container"] {
+                    color: #ffffff !important;
                 }
             </style>
         """, unsafe_allow_html=True)
