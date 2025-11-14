@@ -4,11 +4,79 @@ from llm_wrapper import query_llm
 import pandas as pd
 from io import BytesIO
 import json
+import sqlite3
+import os
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
+
+def init_notes_db():
+    """Initialize notes database"""
+    db_path = os.path.join(os.path.dirname(__file__), "apc_notes.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT,
+            cpt_code TEXT,
+            notes_text TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+    
+    conn.commit()
+    conn.close()
+
+def save_notes(session_id, cpt_code, notes_text):
+    """Save or update notes for a session/CPT code"""
+    db_path = os.path.join(os.path.dirname(__file__), "apc_notes.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Check if notes already exist for this session/CPT
+    cursor.execute("""
+        SELECT id FROM notes WHERE session_id = ? AND cpt_code = ?
+    """, (session_id, cpt_code))
+    
+    existing = cursor.fetchone()
+    
+    if existing:
+        # Update existing notes
+        cursor.execute("""
+            UPDATE notes SET notes_text = ?, updated_at = ?
+            WHERE session_id = ? AND cpt_code = ?
+        """, (notes_text, timestamp, session_id, cpt_code))
+    else:
+        # Insert new notes
+        cursor.execute("""
+            INSERT INTO notes (session_id, cpt_code, notes_text, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (session_id, cpt_code, notes_text, timestamp, timestamp))
+    
+    conn.commit()
+    conn.close()
+
+def get_notes(session_id, cpt_code):
+    """Retrieve notes for a session/CPT code"""
+    db_path = os.path.join(os.path.dirname(__file__), "apc_notes.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT notes_text FROM notes WHERE session_id = ? AND cpt_code = ?
+    """, (session_id, cpt_code))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    return result[0] if result else ""
 
 def compute_audit_window():
     """Compute the audit window for claims (3 years back from today)"""
@@ -266,6 +334,19 @@ def render_apc_interface():
     # Add custom CSS for buttons and labels
     st.markdown("""
         <style>
+            /* Sidebar notes text area styling */
+            .stSidebar .stTextArea textarea {
+                background-color: #2c2c2c !important;
+                color: #ffffff !important;
+                border: 1px solid #555 !important;
+                border-radius: 6px !important;
+                font-size: 0.9rem !important;
+                line-height: 1.5 !important;
+            }
+            .stSidebar .stTextArea label {
+                color: #ffffff !important;
+            }
+            
             /* Reduce spacing for info boxes */
             .stAlert {
                 margin-top: 0.25rem !important;
@@ -380,6 +461,9 @@ def render_apc_interface():
         </style>
     """, unsafe_allow_html=True)
     
+    # Initialize notes database
+    init_notes_db()
+    
     # Initialize session state for workflow
     if "apc_step" not in st.session_state:
         st.session_state.apc_step = 1
@@ -389,6 +473,45 @@ def render_apc_interface():
         st.session_state.selected_cpt = None
     if "topic_description" not in st.session_state:
         st.session_state.topic_description = ""
+    if "show_notes" not in st.session_state:
+        st.session_state.show_notes = False
+    
+    # Sidebar: Notes Section
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown("### 📝 Research Notes")
+        
+        if st.button("✏️ Open Notes", use_container_width=True):
+            st.session_state.show_notes = not st.session_state.show_notes
+        
+        if st.session_state.show_notes:
+            # Get current CPT code if available
+            current_cpt = st.session_state.selected_cpt if st.session_state.selected_cpt else "general"
+            session_id = st.session_state.get("session_id", "default")
+            
+            # Load existing notes
+            existing_notes = get_notes(session_id, current_cpt)
+            
+            st.markdown(f"**Notes for:** {current_cpt}")
+            
+            notes_text = st.text_area(
+                "Your Notes",
+                value=existing_notes,
+                height=300,
+                placeholder="Add your research notes here...",
+                help="These notes will be saved for this CPT code",
+                label_visibility="collapsed"
+            )
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("💾 Save Notes", use_container_width=True):
+                    save_notes(session_id, current_cpt, notes_text)
+                    st.success("✅ Notes saved!")
+            with col2:
+                if st.button("❌ Close", use_container_width=True):
+                    st.session_state.show_notes = False
+                    st.rerun()
     
     # STEP 1: Topic Input and CPT Code Generation
     if st.session_state.apc_step == 1:
