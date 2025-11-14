@@ -695,6 +695,22 @@ def render_apc_interface():
         # Add custom CSS for larger markdown content
         st.markdown("""
             <style>
+                /* Tab styling - make text white */
+                .stTabs [data-baseweb="tab-list"] {
+                    gap: 8px;
+                }
+                .stTabs [data-baseweb="tab"] {
+                    color: #ffffff !important;
+                    font-weight: 500 !important;
+                }
+                .stTabs [data-baseweb="tab"]:hover {
+                    color: #10a37f !important;
+                }
+                .stTabs [aria-selected="true"] {
+                    color: #10a37f !important;
+                    font-weight: 600 !important;
+                }
+                
                 .stMarkdown p, .stMarkdown li, .stMarkdown td {
                     font-size: 1.1rem !important;
                     line-height: 1.6 !important;
@@ -755,55 +771,136 @@ def render_apc_interface():
         section_pattern = r'(SECTION \d+ - [^\n]+)'
         sections = re.split(section_pattern, formatted_result)
         
-        # First part before any section
-        if sections[0].strip():
-            st.markdown(sections[0])
-        
-        # Process each section with accuracy toggle
+        # Parse sections into a list
+        section_list = []
         for i in range(1, len(sections), 2):
             if i < len(sections):
                 section_title = sections[i]
                 section_content = sections[i+1] if i+1 < len(sections) else ""
                 
-                # Extract section number
-                section_match = re.match(r'SECTION (\d+)', section_title)
-                section_num = section_match.group(1) if section_match else str((i+1)//2)
-                
-                # Create columns for section title and accuracy toggle
-                col_title, col_toggle = st.columns([3, 2])
-                
-                with col_title:
-                    st.markdown(f"## {section_title}")
-                
-                with col_toggle:
-                    # Display "Accurate?" label and inline buttons
-                    st.markdown("<p style='color: #b0b0b0; font-size: 0.85rem; margin-bottom: 0.25rem; margin-top: 1rem;'>Accurate?</p>", unsafe_allow_html=True)
-                    
-                    accuracy_key = f"section_{section_num}_accuracy"
-                    btn_col1, btn_col2, btn_col3 = st.columns(3)
-                    
-                    with btn_col1:
-                        if st.button("✅ Yes", key=f"{accuracy_key}_yes", use_container_width=True):
-                            st.session_state.section_accuracy[section_num] = "✅ Yes"
-                    with btn_col2:
-                        if st.button("⚠️ Maybe", key=f"{accuracy_key}_maybe", use_container_width=True):
-                            st.session_state.section_accuracy[section_num] = "⚠️ Maybe"
-                    with btn_col3:
-                        if st.button("❌ No", key=f"{accuracy_key}_no", use_container_width=True):
-                            st.session_state.section_accuracy[section_num] = "❌ No"
-                
-                # Display section content
-                # Convert markdown formatting for better display
-                formatted_content = re.sub(r'^(FINAL ASSESSMENT)', r'## \1', section_content, flags=re.MULTILINE)
-                st.markdown(formatted_content)
+                # Extract section number and name
+                section_match = re.match(r'SECTION (\d+) - (.+)', section_title)
+                if section_match:
+                    section_num = section_match.group(1)
+                    section_name = section_match.group(2).strip()
+                    section_list.append({
+                        'num': section_num,
+                        'name': section_name,
+                        'title': section_title,
+                        'content': section_content
+                    })
         
-        # Handle FINAL ASSESSMENT if present
-        final_assessment_match = re.search(r'(FINAL ASSESSMENT[^\n]*)(.*)', formatted_result, re.DOTALL)
-        if final_assessment_match and 'SECTION' not in final_assessment_match.group(0).split('\n')[0]:
-            st.markdown(f"## {final_assessment_match.group(1)}")
-            st.markdown(final_assessment_match.group(2))
+        # If no sections found, show all content without tabs
+        if not section_list:
+            st.warning("⚠️ No sections detected. Displaying full content.")
+            st.markdown(formatted_result)
+        else:
+            # Handle FINAL ASSESSMENT
+            final_assessment_content = ""
+            final_assessment_match = re.search(r'(FINAL ASSESSMENT[^\n]*)(.*)', formatted_result, re.DOTALL)
+            if final_assessment_match:
+                final_assessment_content = final_assessment_match.group(2)
+            
+            # Create tab labels
+            tab_labels = [f"Section {s['num']}: {s['name']}" for s in section_list]
+            if final_assessment_content:
+                tab_labels.append("Final Assessment")
+            
+            # Create tabs
+            tabs = st.tabs(tab_labels)
+            
+            # Render each section in its tab
+            for idx, section in enumerate(section_list):
+                with tabs[idx]:
+                    # Section title and accuracy buttons
+                    col_title, col_toggle = st.columns([3, 2])
+                    
+                    with col_title:
+                        st.markdown(f"## {section['title']}")
+                    
+                    with col_toggle:
+                        # Display "Accurate?" label and inline buttons
+                        st.markdown("<p style='color: #b0b0b0; font-size: 0.85rem; margin-bottom: 0.25rem; margin-top: 1rem;'>Accurate?</p>", unsafe_allow_html=True)
+                        
+                        accuracy_key = f"section_{section['num']}_accuracy"
+                        btn_col1, btn_col2, btn_col3 = st.columns(3)
+                        
+                        with btn_col1:
+                            if st.button("✅ Yes", key=f"{accuracy_key}_yes", use_container_width=True):
+                                st.session_state.section_accuracy[section['num']] = "✅ Yes"
+                        with btn_col2:
+                            if st.button("⚠️ Maybe", key=f"{accuracy_key}_maybe", use_container_width=True):
+                                st.session_state.section_accuracy[section['num']] = "⚠️ Maybe"
+                        with btn_col3:
+                            if st.button("❌ No", key=f"{accuracy_key}_no", use_container_width=True):
+                                st.session_state.section_accuracy[section['num']] = "❌ No"
+                    
+                    # Display section content
+                    st.markdown(section['content'])
+                    
+                    # Download options in each tab
+                    st.markdown("---")
+                    st.subheader("💾 Export Options")
+                    
+                    col_a, col_b = st.columns(2)
+                    
+                    with col_a:
+                        # Excel download
+                        excel_file = create_excel_output(analysis_data["result"], analysis_data["cpt_code"])
+                        st.download_button(
+                            label="📊 Download as Excel",
+                            data=excel_file,
+                            file_name=f"apc_research_{analysis_data['cpt_code']}_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=f"excel_download_tab_{idx}"
+                        )
+                    
+                    with col_b:
+                        # PDF download
+                        pdf_file = create_pdf_output(analysis_data["result"], analysis_data["cpt_code"])
+                        st.download_button(
+                            label="📑 Download as PDF",
+                            data=pdf_file,
+                            file_name=f"apc_research_{analysis_data['cpt_code']}_{datetime.now().strftime('%Y%m%d')}.pdf",
+                            mime="application/pdf",
+                            key=f"pdf_download_tab_{idx}"
+                        )
+            
+            # Final Assessment Tab
+            if final_assessment_content:
+                with tabs[-1]:
+                    st.markdown("## FINAL ASSESSMENT")
+                    st.markdown(final_assessment_content)
+                    
+                    # Download options in Final Assessment tab
+                    st.markdown("---")
+                    st.subheader("💾 Export Options")
+                    
+                    col_a, col_b = st.columns(2)
+                    
+                    with col_a:
+                        # Excel download
+                        excel_file = create_excel_output(analysis_data["result"], analysis_data["cpt_code"])
+                        st.download_button(
+                            label="📊 Download as Excel",
+                            data=excel_file,
+                            file_name=f"apc_research_{analysis_data['cpt_code']}_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="excel_download_final"
+                        )
+                    
+                    with col_b:
+                        # PDF download
+                        pdf_file = create_pdf_output(analysis_data["result"], analysis_data["cpt_code"])
+                        st.download_button(
+                        label="📑 Download as PDF",
+                        data=pdf_file,
+                        file_name=f"apc_research_{analysis_data['cpt_code']}_{datetime.now().strftime('%Y%m%d')}.pdf",
+                        mime="application/pdf",
+                        key="pdf_download_final"
+                    )
         
-        # Display section accuracy summary if any sections were rated
+        # Display section accuracy summary if any sections were rated (outside tabs, at bottom)
         if st.session_state.section_accuracy:
             st.markdown("---")
             st.subheader("📊 Section Accuracy Summary")
@@ -812,32 +909,6 @@ def render_apc_interface():
             for idx, (section_num, rating) in enumerate(st.session_state.section_accuracy.items()):
                 with summary_cols[idx % 6]:
                     st.metric(f"Section {section_num}", rating)
-        
-        # Download options
-        st.markdown("---")
-        st.subheader("💾 Export Options")
-        
-        col_a, col_b = st.columns(2)
-        
-        with col_a:
-            # Excel download
-            excel_file = create_excel_output(analysis_data["result"], analysis_data["cpt_code"])
-            st.download_button(
-                label="📊 Download as Excel",
-                data=excel_file,
-                file_name=f"apc_research_{analysis_data['cpt_code']}_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        
-        with col_b:
-            # PDF download
-            pdf_file = create_pdf_output(analysis_data["result"], analysis_data["cpt_code"])
-            st.download_button(
-                label="📑 Download as PDF",
-                data=pdf_file,
-                file_name=f"apc_research_{analysis_data['cpt_code']}_{datetime.now().strftime('%Y%m%d')}.pdf",
-                mime="application/pdf"
-            )
         
         # Option to start new research
         st.markdown("---")
