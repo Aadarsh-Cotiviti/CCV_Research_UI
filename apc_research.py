@@ -4,6 +4,7 @@ from llm_wrapper import query_llm
 import pandas as pd
 from io import BytesIO
 import json
+import html
 import sqlite3
 import os
 from reportlab.lib.pagesizes import letter
@@ -78,6 +79,61 @@ def get_notes(session_id, cpt_code):
     
     return result[0] if result else ""
 
+def init_chat_db():
+    """Initialize chat database for section-specific conversations"""
+    db_path = os.path.join(os.path.dirname(__file__), "apc_chat.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS chat_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            cpt_code TEXT NOT NULL,
+            section_id TEXT NOT NULL,
+            user_message TEXT NOT NULL,
+            ai_response TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    
+    conn.commit()
+    conn.close()
+
+def save_chat_message(session_id, cpt_code, section_id, user_message, ai_response):
+    """Save a chat message exchange"""
+    db_path = os.path.join(os.path.dirname(__file__), "apc_chat.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    cursor.execute("""
+        INSERT INTO chat_history (session_id, cpt_code, section_id, user_message, ai_response, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (session_id, cpt_code, section_id, user_message, ai_response, timestamp))
+    
+    conn.commit()
+    conn.close()
+
+def get_chat_history(session_id, cpt_code, section_id):
+    """Retrieve chat history for a specific section"""
+    db_path = os.path.join(os.path.dirname(__file__), "apc_chat.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT user_message, ai_response, created_at 
+        FROM chat_history 
+        WHERE session_id = ? AND cpt_code = ? AND section_id = ?
+        ORDER BY created_at ASC
+    """, (session_id, cpt_code, section_id))
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    return [{"user": r[0], "ai": r[1], "timestamp": r[2]} for r in results]
+
 def compute_audit_window():
     """Compute the audit window for claims (3 years back from today)"""
     current_date = datetime.now()
@@ -95,9 +151,11 @@ Audit Window: {window_start} through {window_end}
 
 Context Information: {context_details or "Not specified"}
 
-Complete the following analysis sections:
+Complete the following analysis sections. IMPORTANT: Use the exact XML-style delimiters shown below to structure your response:
 
-SECTION 1 - Code Description Analysis
+<SECTION_1>
+<TITLE>Code Description Analysis</TITLE>
+<CONTENT>
 - Review detailed descriptions for {target_cpt} and neighboring codes
 - List neighboring codes in ASCENDING ORDER (from lowest to highest code number)
 - Detect re-coding possibilities considering:
@@ -105,13 +163,21 @@ SECTION 1 - Code Description Analysis
   • Anatomical location differences
   • Intervention technique specifics
   • Potential bundling scenarios
+</CONTENT>
+</SECTION_1>
 
-SECTION 2 - Guideline Examination
+<SECTION_2>
+<TITLE>Guideline Examination</TITLE>
+<CONTENT>
 - Extract instructional notes specific to {target_cpt}
 - Summarize applicable chapter-level guidelines
 - Note parenthetical references and code relationships
+</CONTENT>
+</SECTION_2>
 
-SECTION 3 - Payment Rate Comparison
+<SECTION_3>
+<TITLE>Payment Rate Comparison</TITLE>
+<CONTENT>
 - Evaluate APC assignments and payment rates for {target_cpt} and related codes
 - Present the comparison in a TABLE format with the following columns:
   | CPT Code | APC Code | Payment Rate | Status | Notes |
@@ -121,34 +187,51 @@ SECTION 3 - Payment Rate Comparison
 - Track rate consistency across quarters/years within audit window
 - Flag potential underpayment or overpayment patterns
 - Use markdown table format for clear presentation
+</CONTENT>
+</SECTION_3>
 
-SECTION 4 - Device Code Analysis
+<SECTION_4>
+<TITLE>Device Code Analysis</TITLE>
+<CONTENT>
 - Confirm if {target_cpt} involves medical devices
 - List relevant HCPCS device codes
 - Highlight common errors:
   • Procedure without device code
   • Device-procedure mismatch
   • Incorrect device type selection
+</CONTENT>
+</SECTION_4>
 
-SECTION 5 - NCCI Compliance Check
+<SECTION_5>
+<TITLE>NCCI Compliance Check</TITLE>
+<CONTENT>
 - Reference NCCI Edit Manual for {target_cpt}
 - Examine PTP (Procedure-to-Procedure) edits
 - Detect modifier abuse patterns:
   • Inappropriate modifier 59 usage
   • Modifier 25 misapplication
   • Other unbundling indicators
+</CONTENT>
+</SECTION_5>
 
-SECTION 6 - Reference Material Review
+<SECTION_6>
+<TITLE>Reference Material Review</TITLE>
+<CONTENT>
 - Locate CPT Assistant guidance for {target_cpt}
 - Find applicable HCPCS Coding Clinic articles
 - Document special coding considerations
+</CONTENT>
+</SECTION_6>
 
-FINAL ASSESSMENT
+<FINAL_ASSESSMENT>
+<CONTENT>
 - Consolidate findings and opportunities
 - Assign priority level (Critical/Moderate/Low)
 - Recommend validation steps
+</CONTENT>
+</FINAL_ASSESSMENT>
 
-Structure output with clear headings and organized bullet points. Use markdown tables where specified.
+CRITICAL: Your response MUST use these exact XML-style tags (<SECTION_1>, <SECTION_2>, etc.) to delimit each section. Place your actual analysis content inside the <CONTENT> tags for each section. Use markdown formatting within the content sections, including tables where specified.
 """
     return research_query
 
@@ -200,6 +283,106 @@ def parse_cpt_codes(llm_response):
                 continue
     
     return codes
+
+def parse_structured_research(llm_response):
+    """
+    Parse LLM response with XML-style section delimiters
+    Returns a list of sections with guaranteed 6 sections + final assessment
+    """
+    import re
+    
+    sections = []
+    
+    # Parse each section (1-6)
+    for i in range(1, 7):
+        section_pattern = rf'<SECTION_{i}>(.*?)</SECTION_{i}>'
+        match = re.search(section_pattern, llm_response, re.DOTALL)
+        
+        if match:
+            section_content = match.group(1)
+            
+            # Extract title
+            title_match = re.search(r'<TITLE>(.*?)</TITLE>', section_content, re.DOTALL)
+            title = title_match.group(1).strip() if title_match else f"Section {i}"
+            
+            # Extract content
+            content_match = re.search(r'<CONTENT>(.*?)</CONTENT>', section_content, re.DOTALL)
+            content = content_match.group(1).strip() if content_match else ""
+            
+            sections.append({
+                'num': str(i),
+                'name': title,
+                'title': f"SECTION {i} - {title}",
+                'content': content
+            })
+        else:
+            # If section not found, create placeholder
+            sections.append({
+                'num': str(i),
+                'name': f"Section {i}",
+                'title': f"SECTION {i} - Not Available",
+                'content': "⚠️ This section was not generated in the response."
+            })
+    
+    # Parse Final Assessment
+    final_pattern = r'<FINAL_ASSESSMENT>(.*?)</FINAL_ASSESSMENT>'
+    final_match = re.search(final_pattern, llm_response, re.DOTALL)
+    
+    if final_match:
+        final_content_block = final_match.group(1)
+        content_match = re.search(r'<CONTENT>(.*?)</CONTENT>', final_content_block, re.DOTALL)
+        final_content = content_match.group(1).strip() if content_match else final_content_block.strip()
+    else:
+        final_content = "⚠️ Final assessment not available."
+    
+    return sections, final_content
+
+def chat_with_section(section_content, cpt_code, user_question, chat_history=None, model="gpt-5"):
+    """
+    Chat with LLM about a specific section
+    
+    Args:
+        section_content: The content of the current section/tab
+        cpt_code: The CPT code being researched
+        user_question: The user's question
+        chat_history: Previous chat messages in this section
+        model: The LLM model to use (same as research generation)
+    
+    Returns:
+        AI response string
+    """
+    # Build context from section content
+    context = f"""
+You are assisting with APC (Ambulatory Payment Classification) research for CPT code: {cpt_code}
+
+Here is the research content for this section:
+---
+{section_content}
+---
+
+The user has a follow-up question about this content. Please answer based on the research above and your medical coding expertise.
+"""
+    
+    # Build messages with chat history
+    messages = [
+        {"role": "system", "content": context}
+    ]
+    
+    # Add previous chat history if available
+    if chat_history:
+        for chat in chat_history:
+            messages.append({"role": "user", "content": chat["user"]})
+            messages.append({"role": "assistant", "content": chat["ai"]})
+    
+    # Add current question
+    messages.append({"role": "user", "content": user_question})
+    
+    try:
+        # Use the same model that was used for research generation
+        response = query_llm(messages, model=model)
+        return response
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 def create_excel_output(analysis_content, cpt_value):
     """Create Excel workbook from research analysis"""
@@ -461,8 +644,9 @@ def render_apc_interface():
         </style>
     """, unsafe_allow_html=True)
     
-    # Initialize notes database
+    # Initialize databases
     init_notes_db()
+    init_chat_db()
     
     # Initialize session state for workflow
     if "apc_step" not in st.session_state:
@@ -475,6 +659,10 @@ def render_apc_interface():
         st.session_state.topic_description = ""
     if "show_notes" not in st.session_state:
         st.session_state.show_notes = False
+    if "section_chat_history" not in st.session_state:
+        st.session_state.section_chat_history = {}
+    if "session_id" not in st.session_state:
+        st.session_state.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     # Sidebar: Notes Section
     with st.sidebar:
@@ -766,133 +954,261 @@ def render_apc_interface():
         # Process and format the result to make sections stand out
         formatted_result = analysis_data["result"]
         
-        # Split content by sections
-        import re
-        section_pattern = r'(SECTION \d+ - [^\n]+)'
-        sections = re.split(section_pattern, formatted_result)
+        # Parse structured sections using XML-style tags
+        section_list, final_assessment_content = parse_structured_research(formatted_result)
         
-        # Parse sections into a list
-        section_list = []
-        for i in range(1, len(sections), 2):
-            if i < len(sections):
-                section_title = sections[i]
-                section_content = sections[i+1] if i+1 < len(sections) else ""
+        # Create tab labels - always 6 sections + final assessment
+        tab_labels = [f"Section {s['num']}: {s['name']}" for s in section_list]
+        tab_labels.append("Final Assessment")
+        
+        # Create tabs
+        tabs = st.tabs(tab_labels)
+        
+        # Render each section in its tab
+        for idx, section in enumerate(section_list):
+            with tabs[idx]:
+                # Section title and accuracy buttons
+                col_title, col_toggle = st.columns([3, 2])
                 
-                # Extract section number and name
-                section_match = re.match(r'SECTION (\d+) - (.+)', section_title)
-                if section_match:
-                    section_num = section_match.group(1)
-                    section_name = section_match.group(2).strip()
-                    section_list.append({
-                        'num': section_num,
-                        'name': section_name,
-                        'title': section_title,
-                        'content': section_content
-                    })
+                with col_title:
+                    st.markdown(f"## {section['title']}")
+                
+                with col_toggle:
+                    # Display "Accurate?" label and inline buttons
+                    st.markdown("<p style='color: #b0b0b0; font-size: 0.85rem; margin-bottom: 0.25rem; margin-top: 1rem;'>Accurate?</p>", unsafe_allow_html=True)
+                    
+                    accuracy_key = f"section_{section['num']}_accuracy"
+                    btn_col1, btn_col2, btn_col3 = st.columns(3)
+                    
+                    with btn_col1:
+                        if st.button("✅ Yes", key=f"{accuracy_key}_yes", use_container_width=True):
+                            st.session_state.section_accuracy[section['num']] = "✅ Yes"
+                    with btn_col2:
+                        if st.button("⚠️ Maybe", key=f"{accuracy_key}_maybe", use_container_width=True):
+                            st.session_state.section_accuracy[section['num']] = "⚠️ Maybe"
+                    with btn_col3:
+                        if st.button("❌ No", key=f"{accuracy_key}_no", use_container_width=True):
+                            st.session_state.section_accuracy[section['num']] = "❌ No"
+                
+                # Display section content
+                st.markdown(section['content'])
+                
+                # Chat Interface
+                st.markdown("---")
+                st.subheader("💬 Ask Questions About This Section")
+                
+                # Get section ID for chat history
+                section_id = f"section_{section['num']}"
+                
+                # Initialize chat history for this section if not exists
+                if section_id not in st.session_state.section_chat_history:
+                    # Load from database
+                    db_history = get_chat_history(
+                        st.session_state.session_id, 
+                        analysis_data["cpt_code"], 
+                        section_id
+                    )
+                    st.session_state.section_chat_history[section_id] = db_history
+                
+                # Display chat history
+                chat_history = st.session_state.section_chat_history.get(section_id, [])
+                if chat_history:
+                    for i, chat in enumerate(chat_history):
+                        # User message bubble (green, aligned right)
+                        st.markdown(f"""
+                        <div style='display: flex; justify-content: flex-end; margin: 0.5rem 0;'>
+                            <div style='background-color: #10a37f; color: white; padding: 1rem; border-radius: 1rem; max-width: 80%; text-align: left; white-space: pre-wrap;'>
+                        """, unsafe_allow_html=True)
+                        st.markdown(chat['user'])
+                        st.markdown("""
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # AI response (no bubble, just regular markdown)
+                        st.markdown(chat['ai'])
+                        st.markdown("---")  # Separator between Q&A pairs
+                
+                # Chat input
+                with st.form(key=f"chat_form_{section_id}_{idx}", clear_on_submit=True):
+                    user_question = st.text_area(
+                        "Your question:",
+                        placeholder="Ask anything about this section...",
+                        height=80,
+                        key=f"chat_input_{section_id}_{idx}"
+                    )
+                    submit_button = st.form_submit_button("Send 📤", use_container_width=True)
+                    
+                    if submit_button and user_question.strip():
+                        with st.spinner("🤔 Thinking..."):
+                            # Get AI response
+                            ai_response = chat_with_section(
+                                section_content=section['title'] + "\n" + section['content'],
+                                cpt_code=analysis_data["cpt_code"],
+                                user_question=user_question,
+                                chat_history=chat_history,
+                                model=analysis_data.get("model", "gpt-5")
+                            )
+                            
+                            # Save to database
+                            save_chat_message(
+                                st.session_state.session_id,
+                                analysis_data["cpt_code"],
+                                section_id,
+                                user_question,
+                                ai_response
+                            )
+                            
+                            # Update session state
+                            new_chat = {
+                                "user": user_question,
+                                "ai": ai_response,
+                                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            }
+                            if section_id not in st.session_state.section_chat_history:
+                                st.session_state.section_chat_history[section_id] = []
+                            st.session_state.section_chat_history[section_id].append(new_chat)
+                            
+                            # Rerun to display new message
+                            st.rerun()
+                
+                # Download options in each tab
+                st.markdown("---")
+                st.subheader("💾 Export Options")
+                
+                col_a, col_b = st.columns(2)
+                
+                with col_a:
+                    # Excel download
+                    excel_file = create_excel_output(analysis_data["result"], analysis_data["cpt_code"])
+                    st.download_button(
+                        label="📊 Download as Excel",
+                        data=excel_file,
+                        file_name=f"apc_research_{analysis_data['cpt_code']}_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key=f"excel_download_tab_{idx}"
+                    )
+                
+                with col_b:
+                    # PDF download
+                    pdf_file = create_pdf_output(analysis_data["result"], analysis_data["cpt_code"])
+                    st.download_button(
+                        label="📑 Download as PDF",
+                        data=pdf_file,
+                        file_name=f"apc_research_{analysis_data['cpt_code']}_{datetime.now().strftime('%Y%m%d')}.pdf",
+                        mime="application/pdf",
+                        key=f"pdf_download_tab_{idx}"
+                    )
         
-        # If no sections found, show all content without tabs
-        if not section_list:
-            st.warning("⚠️ No sections detected. Displaying full content.")
-            st.markdown(formatted_result)
-        else:
-            # Handle FINAL ASSESSMENT
-            final_assessment_content = ""
-            final_assessment_match = re.search(r'(FINAL ASSESSMENT[^\n]*)(.*)', formatted_result, re.DOTALL)
-            if final_assessment_match:
-                final_assessment_content = final_assessment_match.group(2)
-            
-            # Create tab labels
-            tab_labels = [f"Section {s['num']}: {s['name']}" for s in section_list]
-            if final_assessment_content:
-                tab_labels.append("Final Assessment")
-            
-            # Create tabs
-            tabs = st.tabs(tab_labels)
-            
-            # Render each section in its tab
-            for idx, section in enumerate(section_list):
-                with tabs[idx]:
-                    # Section title and accuracy buttons
-                    col_title, col_toggle = st.columns([3, 2])
-                    
-                    with col_title:
-                        st.markdown(f"## {section['title']}")
-                    
-                    with col_toggle:
-                        # Display "Accurate?" label and inline buttons
-                        st.markdown("<p style='color: #b0b0b0; font-size: 0.85rem; margin-bottom: 0.25rem; margin-top: 1rem;'>Accurate?</p>", unsafe_allow_html=True)
+        # Final Assessment Tab
+        if final_assessment_content:
+            with tabs[-1]:
+                st.markdown("## FINAL ASSESSMENT")
+                st.markdown(final_assessment_content)
+                
+                # Chat Interface for Final Assessment
+                st.markdown("---")
+                st.subheader("💬 Ask Questions About The Full Research")
+                
+                # Get section ID for chat history
+                section_id = "final_assessment"
+                
+                # Initialize chat history for final assessment if not exists
+                if section_id not in st.session_state.section_chat_history:
+                    # Load from database
+                    db_history = get_chat_history(
+                        st.session_state.session_id, 
+                        analysis_data["cpt_code"], 
+                        section_id
+                    )
+                    st.session_state.section_chat_history[section_id] = db_history
+                
+                # Display chat history
+                chat_history = st.session_state.section_chat_history.get(section_id, [])
+                if chat_history:
+                    for i, chat in enumerate(chat_history):
+                        # User message bubble (green, aligned right)
+                        st.markdown(f"""
+                        <div style='display: flex; justify-content: flex-end; margin: 0.5rem 0;'>
+                            <div style='background-color: #10a37f; color: white; padding: 1rem; border-radius: 1rem; max-width: 80%; text-align: left; white-space: pre-wrap;'>
+                        """, unsafe_allow_html=True)
+                        st.markdown(chat['user'])
+                        st.markdown("""
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
                         
-                        accuracy_key = f"section_{section['num']}_accuracy"
-                        btn_col1, btn_col2, btn_col3 = st.columns(3)
-                        
-                        with btn_col1:
-                            if st.button("✅ Yes", key=f"{accuracy_key}_yes", use_container_width=True):
-                                st.session_state.section_accuracy[section['num']] = "✅ Yes"
-                        with btn_col2:
-                            if st.button("⚠️ Maybe", key=f"{accuracy_key}_maybe", use_container_width=True):
-                                st.session_state.section_accuracy[section['num']] = "⚠️ Maybe"
-                        with btn_col3:
-                            if st.button("❌ No", key=f"{accuracy_key}_no", use_container_width=True):
-                                st.session_state.section_accuracy[section['num']] = "❌ No"
+                        # AI response (no bubble, just regular markdown)
+                        st.markdown(chat['ai'])
+                        st.markdown("---")  # Separator between Q&A pairs
+                
+                # Chat input for Final Assessment (includes all research context)
+                with st.form(key=f"chat_form_final_assessment_{st.session_state.session_id}", clear_on_submit=True):
+                    user_question = st.text_area(
+                        "Your question:",
+                        placeholder="Ask anything about the complete research...",
+                        height=80,
+                        key=f"chat_input_final_assessment_{st.session_state.session_id}"
+                    )
+                    submit_button = st.form_submit_button("Send 📤", use_container_width=True)
                     
-                    # Display section content
-                    st.markdown(section['content'])
-                    
-                    # Download options in each tab
-                    st.markdown("---")
-                    st.subheader("💾 Export Options")
-                    
-                    col_a, col_b = st.columns(2)
-                    
-                    with col_a:
-                        # Excel download
-                        excel_file = create_excel_output(analysis_data["result"], analysis_data["cpt_code"])
-                        st.download_button(
-                            label="📊 Download as Excel",
-                            data=excel_file,
-                            file_name=f"apc_research_{analysis_data['cpt_code']}_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key=f"excel_download_tab_{idx}"
-                        )
-                    
-                    with col_b:
-                        # PDF download
-                        pdf_file = create_pdf_output(analysis_data["result"], analysis_data["cpt_code"])
-                        st.download_button(
-                            label="📑 Download as PDF",
-                            data=pdf_file,
-                            file_name=f"apc_research_{analysis_data['cpt_code']}_{datetime.now().strftime('%Y%m%d')}.pdf",
-                            mime="application/pdf",
-                            key=f"pdf_download_tab_{idx}"
-                        )
-            
-            # Final Assessment Tab
-            if final_assessment_content:
-                with tabs[-1]:
-                    st.markdown("## FINAL ASSESSMENT")
-                    st.markdown(final_assessment_content)
-                    
-                    # Download options in Final Assessment tab
-                    st.markdown("---")
-                    st.subheader("💾 Export Options")
-                    
-                    col_a, col_b = st.columns(2)
-                    
-                    with col_a:
-                        # Excel download
-                        excel_file = create_excel_output(analysis_data["result"], analysis_data["cpt_code"])
-                        st.download_button(
-                            label="📊 Download as Excel",
-                            data=excel_file,
-                            file_name=f"apc_research_{analysis_data['cpt_code']}_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key="excel_download_final"
-                        )
-                    
-                    with col_b:
-                        # PDF download
-                        pdf_file = create_pdf_output(analysis_data["result"], analysis_data["cpt_code"])
-                        st.download_button(
+                    if submit_button and user_question.strip():
+                        with st.spinner("🤔 Thinking..."):
+                            # For final assessment, include ALL sections as context
+                            full_context = analysis_data["result"]
+                            
+                            # Get AI response
+                            ai_response = chat_with_section(
+                                section_content=full_context,
+                                cpt_code=analysis_data["cpt_code"],
+                                user_question=user_question,
+                                chat_history=chat_history,
+                                model=analysis_data.get("model", "gpt-5")
+                            )
+                            
+                            # Save to database
+                            save_chat_message(
+                                st.session_state.session_id,
+                                analysis_data["cpt_code"],
+                                section_id,
+                                user_question,
+                                ai_response
+                            )
+                            
+                            # Update session state
+                            new_chat = {
+                                "user": user_question,
+                                "ai": ai_response,
+                                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            }
+                            if section_id not in st.session_state.section_chat_history:
+                                st.session_state.section_chat_history[section_id] = []
+                            st.session_state.section_chat_history[section_id].append(new_chat)
+                            
+                            # Rerun to display new message
+                            st.rerun()
+                
+                # Download options in Final Assessment tab
+                st.markdown("---")
+                st.subheader("💾 Export Options")
+                
+                col_a, col_b = st.columns(2)
+                
+                with col_a:
+                    # Excel download
+                    excel_file = create_excel_output(analysis_data["result"], analysis_data["cpt_code"])
+                    st.download_button(
+                        label="📊 Download as Excel",
+                        data=excel_file,
+                        file_name=f"apc_research_{analysis_data['cpt_code']}_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="excel_download_final"
+                    )
+                
+                with col_b:
+                    # PDF download
+                    pdf_file = create_pdf_output(analysis_data["result"], analysis_data["cpt_code"])
+                    st.download_button(
                         label="📑 Download as PDF",
                         data=pdf_file,
                         file_name=f"apc_research_{analysis_data['cpt_code']}_{datetime.now().strftime('%Y%m%d')}.pdf",
