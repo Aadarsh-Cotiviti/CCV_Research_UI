@@ -585,7 +585,7 @@ def render_apc_interface():
     window_start, window_end = compute_audit_window()
     st.info(f"📅 Current Audit Window: {window_start} to {window_end}")
     
-    # Add custom CSS for buttons and labels
+    # Add custom CSS for layout and inputs only
     st.markdown("""
         <style>
             /* Sidebar notes text area styling */
@@ -601,32 +601,26 @@ def render_apc_interface():
                 color: #ffffff !important;
             }
             
-            /* Sidebar buttons - greyish background */
+            /* Make all buttons start with darker color (like hover state) */
+            .stButton > button,
+            .stDownloadButton > button,
+            .stFormSubmitButton > button,
             .stSidebar .stButton > button,
-            .stSidebar button[data-testid="baseButton-primary"],
-            .stSidebar button[data-testid="baseButton-secondary"],
-            .stSidebar div[data-testid="stButton"] > button {
-                background-color: #d0d0d0 !important;
-                color: #000000 !important;
-                border: 2px solid #000000 !important;
-                border-radius: 8px !important;
-                padding: 12px 20px !important;
-                font-weight: bold !important;
-                font-size: 1.1rem !important;
+            button[kind="primary"],
+            button[kind="secondary"] {
+                background-color: rgb(43, 44, 54) !important;
+                color: rgb(255, 255, 255) !important;
             }
+            
+            /* Even darker on hover */
+            .stButton > button:hover,
+            .stDownloadButton > button:hover,
+            .stFormSubmitButton > button:hover,
             .stSidebar .stButton > button:hover,
-            .stSidebar button[data-testid="baseButton-primary"]:hover,
-            .stSidebar button[data-testid="baseButton-secondary"]:hover,
-            .stSidebar div[data-testid="stButton"] > button:hover {
-                background-color: #b8b8b8 !important;
-                color: #000000 !important;
-                border: 2px solid #000000 !important;
-            }
-            .stSidebar .stButton > button:active,
-            .stSidebar button[data-testid="baseButton-primary"]:active,
-            .stSidebar button[data-testid="baseButton-secondary"]:active,
-            .stSidebar div[data-testid="stButton"] > button:active {
-                background-color: #a0a0a0 !important;
+            button[kind="primary"]:hover,
+            button[kind="secondary"]:hover {
+                background-color: rgb(28, 29, 35) !important;
+                color: rgb(255, 255, 255) !important;
             }
             
             /* Reduce spacing for info boxes */
@@ -674,108 +668,6 @@ def render_apc_interface():
             
             .stForm label {
                 color: #ffffff !important;
-            }
-            /* Form submit buttons - MOST SPECIFIC FIRST */
-            .stForm button[type="submit"],
-            form button[type="submit"],
-            div[data-testid="stForm"] button,
-            .stForm .stFormSubmitButton > button {
-                background-color: #d0d0d0 !important;
-                color: #000000 !important;
-                border: 2px solid #000000 !important;
-                border-radius: 8px !important;
-                padding: 12px 20px !important;
-                font-weight: bold !important;
-                font-size: 1.1rem !important;
-            }
-            .stForm button[type="submit"]:hover,
-            form button[type="submit"]:hover,
-            div[data-testid="stForm"] button:hover,
-            .stForm .stFormSubmitButton > button:hover {
-                background-color: #b8b8b8 !important;
-                color: #000000 !important;
-                border: 2px solid #000000 !important;
-            }
-            /* Force text color inside form buttons */
-            .stForm button[type="submit"] *,
-            form button[type="submit"] *,
-            div[data-testid="stForm"] button *,
-            .stForm .stFormSubmitButton > button * {
-                color: #000000 !important;
-            }
-            /* ALL BUTTONS - Greyish background with black text using multiple selectors */
-            .stButton > button,
-            button[data-testid="baseButton-primary"],
-            button[data-testid="baseButton-secondary"],
-            div[data-testid="stButton"] > button,
-            button[kind="primary"],
-            button[kind="secondary"] {
-                background-color: #d0d0d0 !important;
-                color: #000000 !important;
-                border: 2px solid #000000 !important;
-                border-radius: 8px !important;
-                padding: 12px 20px !important;
-                font-weight: bold !important;
-                font-size: 1.1rem !important;
-                transition: background-color 0.3s !important;
-            }
-            
-            /* Smaller buttons for accuracy feedback (Yes/No/Maybe) */
-            button[data-testid="baseButton-primary"][aria-label*="Yes"],
-            button[data-testid="baseButton-primary"][aria-label*="No"],
-            button[data-testid="baseButton-primary"][aria-label*="Maybe"],
-            .stButton > button:contains("Yes"),
-            .stButton > button:contains("No"),
-            .stButton > button:contains("Maybe") {
-                padding: 4px 8px !important;
-                font-size: 0.75rem !important;
-                font-weight: normal !important;
-                border-radius: 6px !important;
-            }
-            /* Button text and children */
-            .stButton > button *,
-            button[data-testid="baseButton-primary"] *,
-            button[data-testid="baseButton-secondary"] *,
-            div[data-testid="stButton"] > button * {
-                color: #000000 !important;
-            }
-            /* Hover states */
-            .stButton > button:hover,
-            button[data-testid="baseButton-primary"]:hover,
-            button[data-testid="baseButton-secondary"]:hover,
-            div[data-testid="stButton"] > button:hover,
-            button[kind="primary"]:hover,
-            button[kind="secondary"]:hover {
-                background-color: #b8b8b8 !important;
-                border: 2px solid #000000 !important;
-                color: #000000 !important;
-            }
-            /* Active/Focus states */
-            .stButton > button:active,
-            .stButton > button:focus,
-            button[data-testid="baseButton-primary"]:active,
-            button[data-testid="baseButton-secondary"]:active {
-                background-color: #a0a0a0 !important;
-                border: 2px solid #000000 !important;
-                color: #000000 !important;
-                box-shadow: none !important;
-            }
-            /* Download buttons */
-            .stDownloadButton > button,
-            div[data-testid="stDownloadButton"] > button {
-                background-color: #d0d0d0 !important;
-                color: #000000 !important;
-                border: 2px solid #000000 !important;
-                border-radius: 8px !important;
-                padding: 12px 20px !important;
-                font-weight: bold !important;
-                font-size: 1.1rem !important;
-            }
-            .stDownloadButton > button:hover,
-            div[data-testid="stDownloadButton"] > button:hover {
-                background-color: #b8b8b8 !important;
-                color: #000000 !important;
-                border: 2px solid #000000 !important;
             }
         </style>
     """, unsafe_allow_html=True)
