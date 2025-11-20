@@ -100,6 +100,77 @@ def init_chat_db():
     conn.commit()
     conn.close()
 
+def init_feedback_db():
+    """Initialize feedback database for accuracy ratings"""
+    db_path = os.path.join(os.path.dirname(__file__), "apc_feedback.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS accuracy_feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            cpt_code TEXT NOT NULL,
+            section_id TEXT NOT NULL,
+            rating TEXT NOT NULL,
+            reason TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+    
+    conn.commit()
+    conn.close()
+
+def save_accuracy_feedback(session_id, cpt_code, section_id, rating, reason=None):
+    """Save accuracy feedback for a section"""
+    db_path = os.path.join(os.path.dirname(__file__), "apc_feedback.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Check if feedback already exists for this session/section
+    cursor.execute("""
+        SELECT id FROM accuracy_feedback 
+        WHERE session_id = ? AND cpt_code = ? AND section_id = ?
+    """, (session_id, cpt_code, section_id))
+    
+    existing = cursor.fetchone()
+    
+    if existing:
+        # Update existing feedback
+        cursor.execute("""
+            UPDATE accuracy_feedback 
+            SET rating = ?, reason = ?, created_at = ?
+            WHERE session_id = ? AND cpt_code = ? AND section_id = ?
+        """, (rating, reason, timestamp, session_id, cpt_code, section_id))
+    else:
+        # Insert new feedback
+        cursor.execute("""
+            INSERT INTO accuracy_feedback 
+            (session_id, cpt_code, section_id, rating, reason, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (session_id, cpt_code, section_id, rating, reason, timestamp))
+    
+    conn.commit()
+    conn.close()
+
+def get_accuracy_feedback(session_id, cpt_code, section_id):
+    """Retrieve accuracy feedback for a section"""
+    db_path = os.path.join(os.path.dirname(__file__), "apc_feedback.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT rating, reason FROM accuracy_feedback 
+        WHERE session_id = ? AND cpt_code = ? AND section_id = ?
+    """, (session_id, cpt_code, section_id))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    return {"rating": result[0], "reason": result[1]} if result else None
+
 def save_chat_message(session_id, cpt_code, section_id, user_message, ai_response):
     """Save a chat message exchange"""
     db_path = os.path.join(os.path.dirname(__file__), "apc_chat.db")
@@ -530,6 +601,34 @@ def render_apc_interface():
                 color: #ffffff !important;
             }
             
+            /* Sidebar buttons - greyish background */
+            .stSidebar .stButton > button,
+            .stSidebar button[data-testid="baseButton-primary"],
+            .stSidebar button[data-testid="baseButton-secondary"],
+            .stSidebar div[data-testid="stButton"] > button {
+                background-color: #d0d0d0 !important;
+                color: #000000 !important;
+                border: 2px solid #000000 !important;
+                border-radius: 8px !important;
+                padding: 12px 20px !important;
+                font-weight: bold !important;
+                font-size: 1.1rem !important;
+            }
+            .stSidebar .stButton > button:hover,
+            .stSidebar button[data-testid="baseButton-primary"]:hover,
+            .stSidebar button[data-testid="baseButton-secondary"]:hover,
+            .stSidebar div[data-testid="stButton"] > button:hover {
+                background-color: #b8b8b8 !important;
+                color: #000000 !important;
+                border: 2px solid #000000 !important;
+            }
+            .stSidebar .stButton > button:active,
+            .stSidebar button[data-testid="baseButton-primary"]:active,
+            .stSidebar button[data-testid="baseButton-secondary"]:active,
+            .stSidebar div[data-testid="stButton"] > button:active {
+                background-color: #a0a0a0 !important;
+            }
+            
             /* Reduce spacing for info boxes */
             .stAlert {
                 margin-top: 0.25rem !important;
@@ -547,6 +646,30 @@ def render_apc_interface():
             h3 {
                 margin-top: 0.5rem !important;
                 margin-bottom: 0.5rem !important;
+                color: #ffffff !important;
+            }
+            
+            /* Main content area text inputs and selectboxes - greyish background */
+            .main .stTextInput input,
+            .main .stTextArea textarea,
+            .main .stSelectbox select,
+            .main .stSelectbox div[data-baseweb="select"] > div,
+            div[data-testid="stTextInput"] input,
+            div[data-testid="stTextArea"] textarea,
+            div[data-testid="stSelectbox"] select,
+            div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+            div[data-baseweb="select"] > div {
+                background-color: #d0d0d0 !important;
+                color: #000000 !important;
+                border: 1px solid #999 !important;
+                border-radius: 6px !important;
+            }
+            
+            .main .stTextInput input:focus,
+            .main .stTextArea textarea:focus,
+            .main .stSelectbox select:focus {
+                border: 2px solid #000000 !important;
+                background-color: #e0e0e0 !important;
             }
             
             .stForm label {
@@ -557,7 +680,7 @@ def render_apc_interface():
             form button[type="submit"],
             div[data-testid="stForm"] button,
             .stForm .stFormSubmitButton > button {
-                background-color: #ffffff !important;
+                background-color: #d0d0d0 !important;
                 color: #000000 !important;
                 border: 2px solid #000000 !important;
                 border-radius: 8px !important;
@@ -569,7 +692,7 @@ def render_apc_interface():
             form button[type="submit"]:hover,
             div[data-testid="stForm"] button:hover,
             .stForm .stFormSubmitButton > button:hover {
-                background-color: #f0f0f0 !important;
+                background-color: #b8b8b8 !important;
                 color: #000000 !important;
                 border: 2px solid #000000 !important;
             }
@@ -580,14 +703,14 @@ def render_apc_interface():
             .stForm .stFormSubmitButton > button * {
                 color: #000000 !important;
             }
-            /* ALL BUTTONS - White background with black text using multiple selectors */
+            /* ALL BUTTONS - Greyish background with black text using multiple selectors */
             .stButton > button,
             button[data-testid="baseButton-primary"],
             button[data-testid="baseButton-secondary"],
             div[data-testid="stButton"] > button,
             button[kind="primary"],
             button[kind="secondary"] {
-                background-color: #ffffff !important;
+                background-color: #d0d0d0 !important;
                 color: #000000 !important;
                 border: 2px solid #000000 !important;
                 border-radius: 8px !important;
@@ -595,6 +718,19 @@ def render_apc_interface():
                 font-weight: bold !important;
                 font-size: 1.1rem !important;
                 transition: background-color 0.3s !important;
+            }
+            
+            /* Smaller buttons for accuracy feedback (Yes/No/Maybe) */
+            button[data-testid="baseButton-primary"][aria-label*="Yes"],
+            button[data-testid="baseButton-primary"][aria-label*="No"],
+            button[data-testid="baseButton-primary"][aria-label*="Maybe"],
+            .stButton > button:contains("Yes"),
+            .stButton > button:contains("No"),
+            .stButton > button:contains("Maybe") {
+                padding: 4px 8px !important;
+                font-size: 0.75rem !important;
+                font-weight: normal !important;
+                border-radius: 6px !important;
             }
             /* Button text and children */
             .stButton > button *,
@@ -610,7 +746,7 @@ def render_apc_interface():
             div[data-testid="stButton"] > button:hover,
             button[kind="primary"]:hover,
             button[kind="secondary"]:hover {
-                background-color: #f0f0f0 !important;
+                background-color: #b8b8b8 !important;
                 border: 2px solid #000000 !important;
                 color: #000000 !important;
             }
@@ -619,7 +755,7 @@ def render_apc_interface():
             .stButton > button:focus,
             button[data-testid="baseButton-primary"]:active,
             button[data-testid="baseButton-secondary"]:active {
-                background-color: #e0e0e0 !important;
+                background-color: #a0a0a0 !important;
                 border: 2px solid #000000 !important;
                 color: #000000 !important;
                 box-shadow: none !important;
@@ -627,7 +763,7 @@ def render_apc_interface():
             /* Download buttons */
             .stDownloadButton > button,
             div[data-testid="stDownloadButton"] > button {
-                background-color: #ffffff !important;
+                background-color: #d0d0d0 !important;
                 color: #000000 !important;
                 border: 2px solid #000000 !important;
                 border-radius: 8px !important;
@@ -637,7 +773,7 @@ def render_apc_interface():
             }
             .stDownloadButton > button:hover,
             div[data-testid="stDownloadButton"] > button:hover {
-                background-color: #f0f0f0 !important;
+                background-color: #b8b8b8 !important;
                 color: #000000 !important;
                 border: 2px solid #000000 !important;
             }
@@ -647,6 +783,7 @@ def render_apc_interface():
     # Initialize databases
     init_notes_db()
     init_chat_db()
+    init_feedback_db()
     
     # Initialize session state for workflow
     if "apc_step" not in st.session_state:
@@ -967,28 +1104,9 @@ def render_apc_interface():
         # Render each section in its tab
         for idx, section in enumerate(section_list):
             with tabs[idx]:
-                # Section title and accuracy buttons
-                col_title, col_toggle = st.columns([3, 2])
-                
-                with col_title:
-                    st.markdown(f"## {section['title']}")
-                
-                with col_toggle:
-                    # Display "Accurate?" label and inline buttons
-                    st.markdown("<p style='color: #b0b0b0; font-size: 0.85rem; margin-bottom: 0.25rem; margin-top: 1rem;'>Accurate?</p>", unsafe_allow_html=True)
-                    
-                    accuracy_key = f"section_{section['num']}_accuracy"
-                    btn_col1, btn_col2, btn_col3 = st.columns(3)
-                    
-                    with btn_col1:
-                        if st.button("✅ Yes", key=f"{accuracy_key}_yes", use_container_width=True):
-                            st.session_state.section_accuracy[section['num']] = "✅ Yes"
-                    with btn_col2:
-                        if st.button("⚠️ Maybe", key=f"{accuracy_key}_maybe", use_container_width=True):
-                            st.session_state.section_accuracy[section['num']] = "⚠️ Maybe"
-                    with btn_col3:
-                        if st.button("❌ No", key=f"{accuracy_key}_no", use_container_width=True):
-                            st.session_state.section_accuracy[section['num']] = "❌ No"
+                # Section title only
+                st.markdown(f"## {section['title']}")
+                st.markdown("---")
                 
                 # Display section content
                 st.markdown(section['content'])
@@ -997,8 +1115,83 @@ def render_apc_interface():
                 st.markdown("---")
                 st.subheader("💬 Ask Questions About This Section")
                 
-                # Get section ID for chat history
+                # Accuracy feedback section (after "Ask Questions")
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # Get section ID
                 section_id = f"section_{section['num']}"
+                
+                # Accuracy buttons in one line
+                col_label, col_yes, col_maybe, col_no = st.columns([0.6, 0.4, 0.5, 0.4])
+                
+                with col_label:
+                    st.markdown("<p style='color: #ffffff; font-size: 0.95rem; margin-top: 0.5rem; margin-bottom: 0; white-space: nowrap; font-weight: 500;'>Accurate?</p>", unsafe_allow_html=True)
+                
+                accuracy_key = f"section_{section['num']}_accuracy"
+                
+                # Initialize feedback state key
+                feedback_state_key = f"show_feedback_{section_id}"
+                if feedback_state_key not in st.session_state:
+                    st.session_state[feedback_state_key] = False
+                
+                with col_yes:
+                    if st.button("✅ Yes", key=f"{accuracy_key}_yes", use_container_width=True):
+                        st.session_state.section_accuracy[section['num']] = "✅ Yes"
+                        st.session_state[feedback_state_key] = False
+                        save_accuracy_feedback(
+                            st.session_state.session_id,
+                            analysis_data["cpt_code"],
+                            section_id,
+                            "✅ Yes",
+                            None
+                        )
+                        st.rerun()
+                        
+                with col_maybe:
+                    if st.button("⚠️ Maybe", key=f"{accuracy_key}_maybe", use_container_width=True):
+                        st.session_state.section_accuracy[section['num']] = "⚠️ Maybe"
+                        st.session_state[feedback_state_key] = True
+                        
+                with col_no:
+                    if st.button("❌ No", key=f"{accuracy_key}_no", use_container_width=True):
+                        st.session_state.section_accuracy[section['num']] = "❌ No"
+                        st.session_state[feedback_state_key] = True
+                
+                # Show reason input if Maybe or No was selected
+                if st.session_state.get(feedback_state_key, False):
+                    current_rating = st.session_state.section_accuracy.get(section['num'], '')
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='color: #ffffff; font-size: 0.9rem; margin-bottom: 0.5rem;'>Please explain why you selected {current_rating}:</p>", unsafe_allow_html=True)
+                    reason_input = st.text_input(
+                        "Reason",
+                        key=f"reason_{section_id}",
+                        placeholder="Enter your reason here...",
+                        label_visibility="collapsed"
+                    )
+                    
+                    col_save, col_cancel = st.columns([1, 1])
+                    with col_save:
+                        if st.button("💾 Save Feedback", key=f"save_feedback_{section_id}", use_container_width=True):
+                            if reason_input.strip():
+                                save_accuracy_feedback(
+                                    st.session_state.session_id,
+                                    analysis_data["cpt_code"],
+                                    section_id,
+                                    current_rating,
+                                    reason_input
+                                )
+                                st.session_state[feedback_state_key] = False
+                                st.success("✅ Feedback saved!")
+                                st.rerun()
+                            else:
+                                st.warning("Please provide a reason.")
+                    
+                    with col_cancel:
+                        if st.button("✖️ Cancel", key=f"cancel_feedback_{section_id}", use_container_width=True):
+                            st.session_state[feedback_state_key] = False
+                            st.rerun()
+                
+                st.markdown("<br>", unsafe_allow_html=True)
                 
                 # Initialize chat history for this section if not exists
                 if section_id not in st.session_state.section_chat_history:
@@ -1103,15 +1296,93 @@ def render_apc_interface():
         # Final Assessment Tab
         if final_assessment_content:
             with tabs[-1]:
+                # Title only
                 st.markdown("## FINAL ASSESSMENT")
+                st.markdown("---")
+                
                 st.markdown(final_assessment_content)
                 
                 # Chat Interface for Final Assessment
                 st.markdown("---")
                 st.subheader("💬 Ask Questions About The Full Research")
                 
-                # Get section ID for chat history
+                # Accuracy feedback section (after "Ask Questions")
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # Get section ID
                 section_id = "final_assessment"
+                
+                # Accuracy buttons in one line
+                col_label, col_yes, col_maybe, col_no = st.columns([0.6, 0.4, 0.5, 0.4])
+                
+                with col_label:
+                    st.markdown("<p style='color: #ffffff; font-size: 0.95rem; margin-top: 0.5rem; margin-bottom: 0; white-space: nowrap; font-weight: 500;'>Accurate?</p>", unsafe_allow_html=True)
+                
+                accuracy_key = "final_assessment_accuracy"
+                
+                # Initialize feedback state key
+                feedback_state_key = f"show_feedback_{section_id}"
+                if feedback_state_key not in st.session_state:
+                    st.session_state[feedback_state_key] = False
+                
+                with col_yes:
+                    if st.button("✅ Yes", key=f"{accuracy_key}_yes", use_container_width=True):
+                        st.session_state.section_accuracy['final'] = "✅ Yes"
+                        st.session_state[feedback_state_key] = False
+                        save_accuracy_feedback(
+                            st.session_state.session_id,
+                            analysis_data["cpt_code"],
+                            section_id,
+                            "✅ Yes",
+                            None
+                        )
+                        st.rerun()
+                        
+                with col_maybe:
+                    if st.button("⚠️ Maybe", key=f"{accuracy_key}_maybe", use_container_width=True):
+                        st.session_state.section_accuracy['final'] = "⚠️ Maybe"
+                        st.session_state[feedback_state_key] = True
+                        
+                with col_no:
+                    if st.button("❌ No", key=f"{accuracy_key}_no", use_container_width=True):
+                        st.session_state.section_accuracy['final'] = "❌ No"
+                        st.session_state[feedback_state_key] = True
+                
+                # Show reason input if Maybe or No was selected
+                if st.session_state.get(feedback_state_key, False):
+                    current_rating = st.session_state.section_accuracy.get('final', '')
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='color: #ffffff; font-size: 0.9rem; margin-bottom: 0.5rem;'>Please explain why you selected {current_rating}:</p>", unsafe_allow_html=True)
+                    reason_input = st.text_input(
+                        "Reason",
+                        key=f"reason_{section_id}",
+                        placeholder="Enter your reason here...",
+                        label_visibility="collapsed"
+                    )
+                    
+                    col_save, col_cancel = st.columns([1, 1])
+                    with col_save:
+                        if st.button("💾 Save Feedback", key=f"save_feedback_{section_id}", use_container_width=True):
+                            if reason_input.strip():
+                                save_accuracy_feedback(
+                                    st.session_state.session_id,
+                                    analysis_data["cpt_code"],
+                                    section_id,
+                                    current_rating,
+                                    reason_input
+                                )
+                                st.session_state[feedback_state_key] = False
+                                st.success("✅ Feedback saved!")
+                                st.rerun()
+                            else:
+                                st.warning("Please provide a reason.")
+                    
+                    with col_cancel:
+                        if st.button("✖️ Cancel", key=f"cancel_feedback_{section_id}", use_container_width=True):
+                            st.session_state[feedback_state_key] = False
+                            st.rerun()
+                
+                st.markdown("<br>", unsafe_allow_html=True)
                 
                 # Initialize chat history for final assessment if not exists
                 if section_id not in st.session_state.section_chat_history:
