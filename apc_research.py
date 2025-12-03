@@ -100,6 +100,157 @@ def init_chat_db():
     conn.commit()
     conn.close()
 
+def init_research_sessions_db():
+    """Initialize research sessions database"""
+    db_path = os.path.join(os.path.dirname(__file__), "apc_research_sessions.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS research_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT UNIQUE NOT NULL,
+            topic TEXT NOT NULL,
+            cpt_code TEXT NOT NULL,
+            model_used TEXT NOT NULL,
+            analysis_result TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+    
+    conn.commit()
+    conn.close()
+
+def save_research_session(session_id, topic, cpt_code, model_used, analysis_result):
+    """Save or update a research session"""
+    db_path = os.path.join(os.path.dirname(__file__), "apc_research_sessions.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Check if session already exists
+    cursor.execute("""
+        SELECT id FROM research_sessions WHERE session_id = ?
+    """, (session_id,))
+    
+    existing = cursor.fetchone()
+    
+    if existing:
+        # Update existing session
+        cursor.execute("""
+            UPDATE research_sessions 
+            SET topic = ?, cpt_code = ?, model_used = ?, analysis_result = ?, updated_at = ?
+            WHERE session_id = ?
+        """, (topic, cpt_code, model_used, analysis_result, timestamp, session_id))
+    else:
+        # Insert new session
+        cursor.execute("""
+            INSERT INTO research_sessions 
+            (session_id, topic, cpt_code, model_used, analysis_result, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (session_id, topic, cpt_code, model_used, analysis_result, timestamp, timestamp))
+    
+    conn.commit()
+    conn.close()
+
+def get_all_research_sessions():
+    """Get all research sessions ordered by most recent first"""
+    db_path = os.path.join(os.path.dirname(__file__), "apc_research_sessions.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT session_id, topic, cpt_code, created_at, updated_at
+        FROM research_sessions
+        ORDER BY updated_at DESC
+    """)
+    
+    sessions = cursor.fetchall()
+    conn.close()
+    
+    return sessions
+
+def get_research_session(session_id):
+    """Get a specific research session"""
+    db_path = os.path.join(os.path.dirname(__file__), "apc_research_sessions.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT session_id, topic, cpt_code, model_used, analysis_result, created_at, updated_at
+        FROM research_sessions
+        WHERE session_id = ?
+    """, (session_id,))
+    
+    session = cursor.fetchone()
+    conn.close()
+    
+    if session:
+        return {
+            "session_id": session[0],
+            "topic": session[1],
+            "cpt_code": session[2],
+            "model": session[3],
+            "result": session[4],
+            "created_at": session[5],
+            "updated_at": session[6]
+        }
+    return None
+
+def delete_research_session(session_id):
+    """Delete a research session and all associated data"""
+    # Delete from research sessions
+    db_path = os.path.join(os.path.dirname(__file__), "apc_research_sessions.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM research_sessions WHERE session_id = ?", (session_id,))
+    conn.commit()
+    conn.close()
+    
+    # Delete associated chat history
+    db_path = os.path.join(os.path.dirname(__file__), "apc_chat.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM chat_history WHERE session_id = ?", (session_id,))
+    conn.commit()
+    conn.close()
+    
+    # Delete associated notes
+    db_path = os.path.join(os.path.dirname(__file__), "apc_notes.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM notes WHERE session_id = ?", (session_id,))
+    conn.commit()
+    conn.close()
+    
+    # Delete associated feedback
+    db_path = os.path.join(os.path.dirname(__file__), "apc_feedback.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM accuracy_feedback WHERE session_id = ?", (session_id,))
+    conn.commit()
+    conn.close()
+
+def update_research_topic(session_id, new_topic):
+    """Update the topic name for a research session"""
+    db_path = os.path.join(os.path.dirname(__file__), "apc_research_sessions.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    cursor.execute("""
+        UPDATE research_sessions 
+        SET topic = ?, updated_at = ?
+        WHERE session_id = ?
+    """, (new_topic, timestamp, session_id))
+    
+    conn.commit()
+    conn.close()
+    conn.close()
+
 def init_feedback_db():
     """Initialize feedback database for accuracy ratings"""
     db_path = os.path.join(os.path.dirname(__file__), "apc_feedback.db")
@@ -676,6 +827,7 @@ def render_apc_interface():
     init_notes_db()
     init_chat_db()
     init_feedback_db()
+    init_research_sessions_db()
     
     # Initialize session state for workflow
     if "apc_step" not in st.session_state:
@@ -692,10 +844,106 @@ def render_apc_interface():
         st.session_state.section_chat_history = {}
     if "session_id" not in st.session_state:
         st.session_state.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if "current_research_session_id" not in st.session_state:
+        st.session_state.current_research_session_id = None
+    if "editing_topic" not in st.session_state:
+        st.session_state.editing_topic = {}
     
-    # Sidebar: Notes Section
+    # Sidebar: Research Sessions
     with st.sidebar:
+        st.markdown("### 🔬 Research Sessions")
+        
+        # New Research button
+        if st.button("➕ New Research", use_container_width=True, key="new_research_btn"):
+            # Reset to initial state
+            st.session_state.apc_step = 1
+            st.session_state.generated_cpts = []
+            st.session_state.selected_cpt = None
+            st.session_state.topic_description = ""
+            st.session_state.section_chat_history = {}
+            st.session_state.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+            st.session_state.current_research_session_id = None
+            st.rerun()
+        
         st.markdown("---")
+        
+        # Display previous research sessions
+        sessions = get_all_research_sessions()
+        
+        if sessions:
+            st.markdown("**Previous Research:**")
+            for session_id, topic, cpt_code, created_at, updated_at in sessions:
+                # Create a container for each session
+                with st.container():
+                    col1, col2, col3 = st.columns([6, 1, 1])
+                    
+                    with col1:
+                        # Check if this session is being edited
+                        edit_key = f"edit_{session_id}"
+                        if st.session_state.editing_topic.get(session_id, False):
+                            new_topic = st.text_input(
+                                "Topic",
+                                value=topic,
+                                key=f"topic_input_{session_id}",
+                                label_visibility="collapsed"
+                            )
+                        else:
+                            # Display as button
+                            display_text = f"{topic} - CPT {cpt_code}"
+                            if st.button(display_text, key=f"load_{session_id}", use_container_width=True):
+                                # Load this research session
+                                loaded_session = get_research_session(session_id)
+                                if loaded_session:
+                                    st.session_state.current_research_session_id = session_id
+                                    st.session_state.session_id = session_id
+                                    st.session_state.topic_description = loaded_session["topic"]
+                                    st.session_state.selected_cpt = loaded_session["cpt_code"]
+                                    st.session_state.apc_step = 3  # Jump to analysis view
+                                    
+                                    # Load the analysis data into session state
+                                    st.session_state.apc_analysis = {
+                                        "cpt_code": loaded_session["cpt_code"],
+                                        "context": "",  # Context not stored, set to empty
+                                        "model": loaded_session["model"],
+                                        "result": loaded_session["result"],
+                                        "timestamp": loaded_session["updated_at"],
+                                        "topic": loaded_session["topic"]
+                                    }
+                                    
+                                    # Load chat history (will be loaded on-demand in the UI)
+                                    st.session_state.section_chat_history = {}
+                                    
+                                    st.rerun()
+                    
+                    with col2:
+                        # Edit button
+                        if st.session_state.editing_topic.get(session_id, False):
+                            if st.button("💾", key=f"save_edit_{session_id}"):
+                                new_topic = st.session_state.get(f"topic_input_{session_id}", topic)
+                                if new_topic and new_topic != topic:
+                                    update_research_topic(session_id, new_topic)
+                                st.session_state.editing_topic[session_id] = False
+                                st.rerun()
+                        else:
+                            if st.button("✏️", key=f"edit_{session_id}"):
+                                st.session_state.editing_topic[session_id] = True
+                                st.rerun()
+                    
+                    with col3:
+                        # Delete button
+                        if st.button("🗑️", key=f"delete_{session_id}"):
+                            delete_research_session(session_id)
+                            # If deleted session was current, reset
+                            if st.session_state.current_research_session_id == session_id:
+                                st.session_state.apc_step = 1
+                                st.session_state.current_research_session_id = None
+                            st.rerun()
+                    
+                    st.markdown("---")
+        
+        st.markdown("---")
+        
+        # Notes Section
         st.markdown("### 📝 Research Notes")
         
         if st.button("✏️ Open Notes", use_container_width=True):
@@ -850,6 +1098,17 @@ def render_apc_interface():
                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "topic": st.session_state.topic_description
                 }
+                
+                # Auto-save the research session
+                save_research_session(
+                    session_id=st.session_state.session_id,
+                    topic=st.session_state.topic_description,
+                    cpt_code=st.session_state.selected_cpt,
+                    model_used=selected_model,
+                    analysis_result=analysis_result
+                )
+                st.session_state.current_research_session_id = st.session_state.session_id
+                
                 st.session_state.apc_step = 3
                 st.rerun()
     

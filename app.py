@@ -124,24 +124,33 @@ st.markdown("""
             color: #e0e0e0 !important;
         }
 
-        .stSidebar .stButton button,
+        /* Make all buttons start with darker color (like APC Research page) */
+        .stButton > button,
+        .stDownloadButton > button,
+        .stFormSubmitButton > button,
+        .stSidebar .stButton > button,
+        button[kind="primary"],
+        button[kind="secondary"] {
+            background-color: rgb(43, 44, 54) !important;
+            color: rgb(255, 255, 255) !important;
+        }
+        
+        /* Even darker on hover */
+        .stButton > button:hover,
+        .stDownloadButton > button:hover,
+        .stFormSubmitButton > button:hover,
+        .stSidebar .stButton > button:hover,
+        button[kind="primary"]:hover,
+        button[kind="secondary"]:hover {
+            background-color: rgb(28, 29, 35) !important;
+            color: rgb(255, 255, 255) !important;
+        }
+
         .stSidebar .stSelectbox div,
         .stSidebar .stTextInput input {
             background-color: #d3d3d3 !important;
             color: black !important;
             border: 1px solid #aaa !important;
-        }
-        
-        /* Feedback button styling */
-        .stSidebar button[kind="secondary"] {
-            background-color: #ffffff !important;
-            color: #000000 !important;
-            border: 2px solid #000000 !important;
-            border-radius: 8px !important;
-            font-weight: bold !important;
-        }
-        .stSidebar button[kind="secondary"]:hover {
-            background-color: #f0f0f0 !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -165,7 +174,7 @@ if "pending_user_input" not in st.session_state:
     st.session_state.pending_user_input = None
 
 if "app_mode" not in st.session_state:
-    st.session_state.app_mode = "Chat"
+    st.session_state.app_mode = "APC"
 
 if "show_feedback" not in st.session_state:
     st.session_state.show_feedback = False
