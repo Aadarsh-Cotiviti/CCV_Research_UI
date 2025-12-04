@@ -13,6 +13,107 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
+# Global variable to cache CPT descriptions
+_cpt_descriptions_cache = None
+
+def load_cpt_descriptions():
+    """Load CPT descriptions from xlsx file and cache them"""
+    global _cpt_descriptions_cache
+    
+    if _cpt_descriptions_cache is not None:
+        return _cpt_descriptions_cache
+    
+    try:
+        xlsx_path = os.path.join(os.path.dirname(__file__), "CPT Codes with Long Descriptions 2025.xlsx")
+        
+        if not os.path.exists(xlsx_path):
+            # File doesn't exist, return empty dict silently
+            _cpt_descriptions_cache = {}
+            return _cpt_descriptions_cache
+        
+        df = pd.read_excel(xlsx_path)
+        
+        # Create a dictionary mapping CPT code to description
+        # Convert CPT codes to strings and strip whitespace
+        _cpt_descriptions_cache = {}
+        for _, row in df.iterrows():
+            try:
+                cpt_code = str(row['CPTCd']).strip()
+                description = str(row['FullDesc']).strip()
+                _cpt_descriptions_cache[cpt_code] = description
+            except Exception as e:
+                # Skip this row if there's an error
+                continue
+        
+        return _cpt_descriptions_cache
+    except Exception as e:
+        # If any error occurs, return empty dict and continue without xlsx descriptions
+        _cpt_descriptions_cache = {}
+        return _cpt_descriptions_cache
+
+def get_cpt_description(cpt_code):
+    """Get description for a CPT code from the xlsx file"""
+    descriptions = load_cpt_descriptions()
+    cpt_code_str = str(cpt_code).strip()
+    
+    if cpt_code_str in descriptions:
+        return descriptions[cpt_code_str]
+    else:
+        return None
+
+def replace_cpt_descriptions_in_text(text):
+    """
+    Replace CPT descriptions in text with descriptions from xlsx file.
+    Looks for patterns like 'CPT XXXXX - description' or 'XXXXX - description'
+    """
+    import re
+    
+    # Pattern to match CPT codes in various formats
+    # This will match lines or sections that contain CPT codes followed by descriptions
+    modified_text = text
+    replacements_made = set()
+    
+    # Split by lines to process each line
+    lines = modified_text.split('\n')
+    new_lines = []
+    
+    for line in lines:
+        # Pattern to find CPT codes (5 digits) followed by descriptions
+        # Matches: "CPT 12345 - description", "12345 - description", "CPT 12345: description"
+        # Also matches in bullet points, tables, etc.
+        matches = re.finditer(r'(?:CPT\s+)?(\d{5})\s*[-:–—]\s*([^\n\|\*]+)', line)
+        
+        modified_line = line
+        offset = 0
+        
+        for match in matches:
+            cpt_code = match.group(1)
+            original_desc = match.group(2).strip()
+            full_match = match.group(0)
+            
+            # Get description from xlsx
+            xlsx_desc = get_cpt_description(cpt_code)
+            
+            if xlsx_desc and cpt_code not in replacements_made:
+                # Check if CPT prefix exists
+                has_cpt_prefix = 'CPT' in full_match[:10]
+                prefix = 'CPT ' if has_cpt_prefix else ''
+                
+                # Create replacement
+                new_text = f"{prefix}{cpt_code} - {xlsx_desc}"
+                
+                # Replace in the line
+                start = match.start() + offset
+                end = match.end() + offset
+                modified_line = modified_line[:start] + new_text + modified_line[end:]
+                offset += len(new_text) - len(full_match)
+                
+                replacements_made.add(cpt_code)
+        
+        new_lines.append(modified_line)
+    
+    return '\n'.join(new_lines)
+
 def init_notes_db():
     """Initialize notes database"""
     db_path = os.path.join(os.path.dirname(__file__), "apc_notes.db")
@@ -490,7 +591,7 @@ Provide exactly 5 CPT codes. If the topic is too vague or unclear, provide the m
         return f"Error generating CPT codes: {str(e)}"
 
 def parse_cpt_codes(llm_response):
-    """Parse LLM response to extract CPT codes and descriptions"""
+    """Parse LLM response to extract CPT codes and get descriptions from xlsx"""
     codes = []
     lines = llm_response.strip().split('\n')
     
@@ -499,9 +600,20 @@ def parse_cpt_codes(llm_response):
             try:
                 parts = line.split('|')
                 code_part = parts[0].split('CODE:')[1].strip()
-                desc_part = parts[1].split('DESCRIPTION:')[1].strip()
-                codes.append({"code": code_part, "description": desc_part})
-            except:
+                # LLM provides description, but we'll replace it with xlsx description
+                llm_desc = parts[1].split('DESCRIPTION:')[1].strip()
+                
+                # Get description from xlsx file
+                xlsx_desc = get_cpt_description(code_part)
+                
+                if xlsx_desc:
+                    # Use xlsx description
+                    codes.append({"code": code_part, "description": xlsx_desc})
+                else:
+                    # Fallback to LLM description (warning will be shown later if needed)
+                    codes.append({"code": code_part, "description": llm_desc})
+            except Exception as e:
+                # Continue parsing even if one line fails
                 continue
     
     return codes
@@ -530,6 +642,10 @@ def parse_structured_research(llm_response):
             # Extract content
             content_match = re.search(r'<CONTENT>(.*?)</CONTENT>', section_content, re.DOTALL)
             content = content_match.group(1).strip() if content_match else ""
+            
+            # For Section 1 and Section 3, replace CPT descriptions with xlsx descriptions
+            if i in [1, 3]:
+                content = replace_cpt_descriptions_in_text(content)
             
             sections.append({
                 'num': str(i),
@@ -734,7 +850,7 @@ def render_apc_interface():
     
     # Display audit window
     window_start, window_end = compute_audit_window()
-    st.info(f"📅 Current Audit Window: {window_start} to {window_end}")
+    # Removed: st.info(f"📅 Current Audit Window: {window_start} to {window_end}")
     
     # Add custom CSS for layout and inputs only
     st.markdown("""
@@ -1120,53 +1236,11 @@ def render_apc_interface():
                 hr { margin: 0.5rem 0 !important; }
             </style>
         """, unsafe_allow_html=True)
-        st.markdown("---")
-        st.subheader("📊 Research Results")
         
         analysis_data = st.session_state.apc_analysis
         
-        # Metadata with custom styling
-        st.markdown("""
-            <style>
-                /* Metric values and labels - force white */
-                div[data-testid="stMetricValue"],
-                div[data-testid="stMetricValue"] *,
-                [data-testid="stMetricValue"],
-                [data-testid="stMetricValue"] * {
-                    color: #ffffff !important;
-                    font-weight: bold !important;
-                }
-                div[data-testid="stMetricLabel"],
-                div[data-testid="stMetricLabel"] *,
-                [data-testid="stMetricLabel"],
-                [data-testid="stMetricLabel"] * {
-                    color: #ffffff !important;
-                    font-weight: bold !important;
-                }
-                /* Alternative metric selectors */
-                .stMetric > div > div {
-                    color: #ffffff !important;
-                }
-                .stMetric label {
-                    color: #ffffff !important;
-                    font-weight: bold !important;
-                }
-                .stMetric [data-testid="metric-container"] {
-                    color: #ffffff !important;
-                }
-            </style>
-        """, unsafe_allow_html=True)
-        
-        col1, col2, col3 = st.columns(3)
-        col1.metric("CPT Code", analysis_data["cpt_code"])
-        col2.metric("Model Used", analysis_data["model"])
-        col3.metric("Generated", analysis_data["timestamp"])
-        
-        # Reduce spacing before Analysis Report heading
-        st.markdown("<style>.stMarkdown h3:first-of-type { margin-top: 0.5rem !important; }</style>", unsafe_allow_html=True)
-        
-        # Analysis content with larger font - render as markdown to preserve tables
-        st.markdown("### Analysis Report")
+        # Removed: Research Results heading and Analysis Report heading
+        # Start directly with tabs
         
         # Add custom CSS for larger markdown content
         st.markdown("""
