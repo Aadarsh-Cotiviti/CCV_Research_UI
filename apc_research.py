@@ -1239,6 +1239,10 @@ def render_apc_interface():
         
         analysis_data = st.session_state.apc_analysis
         
+        # Display Topic and CPT Code at the top
+        st.markdown(f"### 📋 {analysis_data.get('topic', 'Research Topic')} - CPT {analysis_data['cpt_code']}")
+        st.markdown("---")
+        
         # Removed: Research Results heading and Analysis Report heading
         # Start directly with tabs
         
