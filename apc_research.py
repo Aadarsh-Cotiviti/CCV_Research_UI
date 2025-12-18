@@ -65,11 +65,11 @@ def replace_cpt_descriptions_in_text(text):
     """
     Replace CPT descriptions in text with descriptions from xlsx file.
     Looks for patterns like 'CPT XXXXX - description' or 'XXXXX - description'
+    Also handles standalone CPT codes and adds descriptions from xlsx.
+    Color codes xlsx descriptions in orange, leaves LLM descriptions in default color.
     """
     import re
     
-    # Pattern to match CPT codes in various formats
-    # This will match lines or sections that contain CPT codes followed by descriptions
     modified_text = text
     replacements_made = set()
     
@@ -78,17 +78,19 @@ def replace_cpt_descriptions_in_text(text):
     new_lines = []
     
     for line in lines:
-        # Pattern to find CPT codes (5 digits) followed by descriptions
-        # Matches: "CPT 12345 - description", "12345 - description", "CPT 12345: description"
-        # Also matches in bullet points, tables, etc.
-        matches = re.finditer(r'(?:CPT\s+)?(\d{5})\s*[-:–—]\s*([^\n\|\*]+)', line)
-        
         modified_line = line
         offset = 0
         
+        # First pass: Replace CPT codes that already have descriptions
+        # Matches: "CPT 12345 - description", "12345 - description", "CPT 12345: description"
+        # Captures everything after the separator until end of line or certain delimiters
+        # Note: Pattern includes various dash types: hyphen(-), en-dash(–), em-dash(—), minus(−)
+        matches = list(re.finditer(r'(?:CPT\s+)?(\d{5})\s*([-:–—−\u2013\u2014])\s*([^\n\|]+?)(?:\s*\||\s*\*|\.(?:\s|$)|$)', line))
+        
         for match in matches:
             cpt_code = match.group(1)
-            original_desc = match.group(2).strip()
+            separator = match.group(2)
+            original_desc = match.group(3).strip()
             full_match = match.group(0)
             
             # Get description from xlsx
@@ -96,17 +98,53 @@ def replace_cpt_descriptions_in_text(text):
             
             if xlsx_desc and cpt_code not in replacements_made:
                 # Check if CPT prefix exists
-                has_cpt_prefix = 'CPT' in full_match[:10]
+                has_cpt_prefix = 'CPT' in full_match[:15]  # Increased range to catch "CPT 12345"
                 prefix = 'CPT ' if has_cpt_prefix else ''
                 
-                # Create replacement
-                new_text = f"{prefix}{cpt_code} - {xlsx_desc}"
+                # Normalize separator - use dash for consistency unless it's a colon after "Detailed Description Review"
+                sep = ': ' if separator == ':' else '- '
+                
+                # Create replacement with orange color for xlsx description
+                new_text = f"{prefix}{cpt_code}{sep}<span style='color: #ff8c00;'>{xlsx_desc}</span>"
                 
                 # Replace in the line
                 start = match.start() + offset
                 end = match.end() + offset
                 modified_line = modified_line[:start] + new_text + modified_line[end:]
                 offset += len(new_text) - len(full_match)
+                
+                replacements_made.add(cpt_code)
+            # If xlsx description doesn't exist, leave the LLM description in default color
+        
+        # Second pass: Find standalone CPT codes without descriptions and add xlsx description
+        # This matches CPT codes that are NOT followed by a dash/colon and description
+        # Pattern: CPT code that's followed by whitespace, comma, period, or end of line
+        standalone_pattern = r'(?:CPT\s+)?(\d{5})(?=\s*(?:[,.\s]|$))(?!\s*[-:–—])'
+        standalone_matches = list(re.finditer(standalone_pattern, modified_line))
+        
+        # Process in reverse to maintain correct offsets
+        for match in reversed(standalone_matches):
+            cpt_code = match.group(1)
+            
+            # Skip if already processed
+            if cpt_code in replacements_made:
+                continue
+            
+            # Get description from xlsx
+            xlsx_desc = get_cpt_description(cpt_code)
+            
+            if xlsx_desc:
+                # Check if CPT prefix exists
+                has_cpt_prefix = 'CPT' in match.group(0)
+                prefix = 'CPT ' if has_cpt_prefix else ''
+                
+                # Create replacement with orange color for xlsx description
+                new_text = f"{prefix}{cpt_code} - <span style='color: #ff8c00;'>{xlsx_desc}</span>"
+                
+                # Replace in the line
+                start = match.start()
+                end = match.end()
+                modified_line = modified_line[:start] + new_text + modified_line[end:]
                 
                 replacements_made.add(cpt_code)
         
@@ -479,13 +517,17 @@ Complete the following analysis sections. IMPORTANT: Use the exact XML-style del
 <SECTION_1>
 <TITLE>Code Description Analysis</TITLE>
 <CONTENT>
-- Review detailed descriptions for {target_cpt} and neighboring codes
+- Start with "Detailed Description Review:" followed by the target code {target_cpt} with its full description
+- Then list "Neighboring Codes (Ascending Order):" 
+- IMPORTANT: Do NOT include {target_cpt} itself in the neighboring codes list - only list codes that are different from the target
 - List neighboring codes in ASCENDING ORDER (from lowest to highest code number)
+- For each CPT code, provide it in this format: CPT XXXXX - [brief description]
 - Detect re-coding possibilities considering:
   • Procedural approach variations (open, percutaneous, laparoscopic)
   • Anatomical location differences
   • Intervention technique specifics
   • Potential bundling scenarios
+- Note: The system will automatically replace code descriptions with authoritative sources where available
 </CONTENT>
 </SECTION_1>
 
@@ -502,7 +544,8 @@ Complete the following analysis sections. IMPORTANT: Use the exact XML-style del
 <TITLE>Payment Rate Comparison</TITLE>
 <CONTENT>
 - Evaluate APC assignments and payment rates for {target_cpt} and related codes
-- Present the comparison in a TABLE format with the following columns:
+- Before the table, list each CPT code with description in format: CPT XXXXX - [description]
+- Then present the comparison in a TABLE format with the following columns:
   | CPT Code | APC Code | Payment Rate | Status | Notes |
 - Categorize findings:
   • Matching rates → No audit opportunity
@@ -510,6 +553,7 @@ Complete the following analysis sections. IMPORTANT: Use the exact XML-style del
 - Track rate consistency across quarters/years within audit window
 - Flag potential underpayment or overpayment patterns
 - Use markdown table format for clear presentation
+- Note: The system will automatically replace code descriptions with authoritative sources where available
 </CONTENT>
 </SECTION_3>
 
@@ -607,11 +651,11 @@ def parse_cpt_codes(llm_response):
                 xlsx_desc = get_cpt_description(code_part)
                 
                 if xlsx_desc:
-                    # Use xlsx description
-                    codes.append({"code": code_part, "description": xlsx_desc})
+                    # Use xlsx description and mark as from internal source
+                    codes.append({"code": code_part, "description": xlsx_desc, "from_xlsx": True})
                 else:
                     # Fallback to LLM description (warning will be shown later if needed)
-                    codes.append({"code": code_part, "description": llm_desc})
+                    codes.append({"code": code_part, "description": llm_desc, "from_xlsx": False})
             except Exception as e:
                 # Continue parsing even if one line fails
                 continue
@@ -1146,7 +1190,9 @@ def render_apc_interface():
                     st.session_state.apc_step = 2
                     st.rerun()
             with col2:
-                st.markdown(f"<div style='padding: 10px 20px; color: #e0e0e0; font-size: 1rem;'>{cpt_info['description']}</div>", unsafe_allow_html=True)
+                # Color code orange if from xlsx, otherwise default color
+                text_color = "#ff8c00" if cpt_info.get('from_xlsx', False) else "#e0e0e0"
+                st.markdown(f"<div style='padding: 10px 20px; color: {text_color}; font-size: 1rem;'>{cpt_info['description']}</div>", unsafe_allow_html=True)
         
         st.markdown("---")
         if st.button("← Back to Topic Input"):
@@ -1338,7 +1384,7 @@ def render_apc_interface():
                 st.markdown("---")
                 
                 # Display section content
-                st.markdown(section['content'])
+                st.markdown(section['content'], unsafe_allow_html=True)
                 
                 # Chat Interface
                 st.markdown("---")
@@ -1529,7 +1575,7 @@ def render_apc_interface():
                 st.markdown("## FINAL ASSESSMENT")
                 st.markdown("---")
                 
-                st.markdown(final_assessment_content)
+                st.markdown(final_assessment_content, unsafe_allow_html=True)
                 
                 # Chat Interface for Final Assessment
                 st.markdown("---")
