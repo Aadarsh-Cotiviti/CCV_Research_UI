@@ -5,8 +5,9 @@ import base64
 from PIL import Image
 from llm_wrapper import query_llm
 from db import init_db, save_interaction, get_sessions, get_session_history, rename_session, delete_session, create_session
-import apc_research
+from views.apc_main_view import render_apc_interface
 from feedback import init_feedback_db, render_feedback_page
+
 
 # Initialize DBs
 init_db()
@@ -15,33 +16,27 @@ init_feedback_db()
 # Page config
 st.set_page_config(page_title="CCV Research AI", layout="wide")
 
-# Load Inter font and apply dark theme styling
+# Load Inter font and apply light theme styling
 st.markdown("""
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
+        /* ===============================
+           Base layout & typography
+           =============================== */
         html, body, .stApp {
-            background-color: #1e1e1e !important;
-            color: #e0e0e0 !important;
+            background-color: #ffffff !important;
+            color: #1f1f1f !important;
             font-family: 'Inter', sans-serif !important;
         }
 
-        [data-testid="stHeader"] {
-            display: none !important;
-        }
-        
-        /* Hide Streamlit toolbar and decorations */
-        [data-testid="stToolbar"] {
-            display: none !important;
-        }
-        
-        [data-testid="stDecoration"] {
-            display: none !important;
-        }
-        
+        /* Hide Streamlit header elements */
+        [data-testid="stHeader"],
+        [data-testid="stToolbar"],
+        [data-testid="stDecoration"],
         [data-testid="stStatusWidget"] {
             display: none !important;
         }
-        
+
         /* Remove all top spacing */
         .main .block-container {
             padding-top: 0 !important;
@@ -57,26 +52,212 @@ st.markdown("""
             margin-top: 0 !important;
             padding-top: 0 !important;
         }
-        
-        /* Remove spacing from first element */
-        .main .block-container > div:first-child {
-            padding-top: 0 !important;
-            margin-top: 0 !important;
-        }
-        
+
         /* Main page logo styling */
         .main-logo-container {
             text-align: center;
             padding: 0 0 0.5rem 0;
             margin: 0 0 1rem 0;
-            border-bottom: 1px solid #333;
-        }
-        
-        .main-logo-container .stColumns {
-            padding-top: 0 !important;
-            margin-top: 0 !important;
+            border-bottom: 1px solid #e0e0e0;
         }
 
+        /* ===============================
+           Text Colors - ALL BLACK
+           =============================== */
+        h1, h2, h3, h4, h5, h6 {
+            color: #1f1f1f !important;
+        }
+        
+        /* Force all markdown headings to be black */
+        .main h1, .main h2, .main h3, .main h4, .main h5, .main h6,
+        [data-testid="stMarkdownContainer"] h1,
+        [data-testid="stMarkdownContainer"] h2,
+        [data-testid="stMarkdownContainer"] h3,
+        [data-testid="stMarkdownContainer"] h4 {
+            color: #1f1f1f !important;
+        }
+
+        /* Exception: Allow source-colored text to keep its color */
+        .source-colored-text,
+        .source-legend-item,
+        .source-legend-container,
+        [id*="src-"],
+        [id*="legend-"] {
+            /* Colors set via inline styles or embedded <style> - don't override */
+        }
+
+        p, span:not(.source-colored-text):not([id*="src-"]):not([id*="legend-"]), 
+        div:not(.source-colored-text):not(.source-legend-container):not([id*="src-"]):not([id*="legend-"]), 
+        label, a {
+            color: #1f1f1f !important;
+        }
+
+        /* Streamlit specific text elements - except source-colored content */
+        .stMarkdown, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3,
+        .stMarkdown p, 
+        .stMarkdown span:not(.source-colored-text):not([id*="src-"]):not([id*="legend-"]),
+        .stMarkdown div:not(.source-colored-text):not(.source-legend-container):not([id*="src-"]):not([id*="legend-"]) {
+            color: #1f1f1f !important;
+        }
+
+        [data-testid="stMarkdownContainer"] h1,
+        [data-testid="stMarkdownContainer"] h2,
+        [data-testid="stMarkdownContainer"] h3,
+        [data-testid="stMarkdownContainer"] p,
+        [data-testid="stMarkdownContainer"] span:not(.source-colored-text):not([id*="src-"]):not([id*="legend-"]),
+        [data-testid="stMarkdownContainer"] div:not(.source-colored-text):not(.source-legend-container):not([id*="src-"]):not([id*="legend-"]) {
+            color: #1f1f1f !important;
+        }
+
+        /* ===============================
+           Buttons - WHITE background, BLACK text
+           =============================== */
+        button,
+        .stButton > button,
+        .stDownloadButton > button,
+        .stFormSubmitButton > button,
+        button[kind="primary"],
+        button[kind="secondary"],
+        [data-testid="baseButton-primary"],
+        [data-testid="baseButton-secondary"] {
+            background-color: #ffffff !important;
+            background: #ffffff !important;
+            background-image: none !important;
+            color: #1f1f1f !important;
+            border: 1px solid #e8e8e8 !important;
+            box-shadow: none !important;
+        }
+
+        /* Button hover */
+        button:hover,
+        .stButton > button:hover,
+        .stDownloadButton > button:hover,
+        .stFormSubmitButton > button:hover,
+        button[kind="primary"]:hover,
+        button[kind="secondary"]:hover,
+        [data-testid="baseButton-primary"]:hover,
+        [data-testid="baseButton-secondary"]:hover {
+            background-color: #f7f7f8 !important;
+            background: #f7f7f8 !important;
+            color: #1f1f1f !important;
+            border: 1px solid #d0d0d0 !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+        }
+
+        /* Button text - force BLACK */
+        button *, 
+        .stButton > button *,
+        .stDownloadButton > button *,
+        .stFormSubmitButton > button *,
+        button[kind="primary"] *,
+        button[kind="secondary"] *,
+        [data-testid="baseButton-primary"] *,
+        [data-testid="baseButton-secondary"] * {
+            color: #1f1f1f !important;
+        }
+
+        /* ===============================
+           Remove button container borders
+           =============================== */
+        .stButton,
+        .stDownloadButton,
+        .stFormSubmitButton,
+        div[data-testid="stButton"],
+        div[data-testid="stDownloadButton"],
+        div[data-testid="stFormSubmitButton"],
+        .stButton > div,
+        .stDownloadButton > div,
+        .stFormSubmitButton > div {
+            border: none !important;
+            outline: none !important;
+            box-shadow: none !important;
+            background: transparent !important;
+        }
+
+        /* Remove ALL focus borders on forms and containers */
+        .stForm,
+        div[data-testid="stForm"],
+        div[data-testid="stForm"]:focus,
+        div[data-testid="stForm"]:focus-within,
+        div[data-testid="stForm"]:hover,
+        .element-container,
+        .element-container:focus,
+        .element-container:focus-within,
+        .element-container:hover,
+        div[data-testid="column"],
+        div[data-testid="column"]:focus,
+        div[data-testid="column"]:focus-within,
+        div[data-testid="column"]:hover,
+        [data-baseweb="card"],
+        [data-baseweb="card"]:focus,
+        [data-baseweb="card"]:focus-within,
+        [data-baseweb="card"]:hover,
+        .row-widget,
+        .row-widget:focus,
+        .row-widget:focus-within,
+        .row-widget:hover {
+            border: none !important;
+            outline: none !important;
+            box-shadow: none !important;
+            background: transparent !important;
+            background-color: transparent !important;
+            background-image: none !important;
+        }
+
+        /* Remove focus-visible outline on all elements */
+        *:focus,
+        *:focus-within,
+        *:focus-visible {
+            outline: none !important;
+            box-shadow: none !important;
+            border-color: transparent !important;
+        }
+
+        /* Force remove any default Streamlit container styling */
+        [class*="st-"] {
+            border: none !important;
+        }
+
+        /* Specifically target form containers */
+        form,
+        form > div,
+        form div {
+            border: none !important;
+            outline: none !important;
+            box-shadow: none !important;
+            background: transparent !important;
+        }
+
+        /* ===============================
+           Sidebar styling
+           =============================== */
+        .stSidebar {
+            background-color: #f7f7f8 !important;
+            color: #1f1f1f !important;
+        }
+
+        .stSidebar h1, .stSidebar h2, .stSidebar h3, 
+        .stSidebar p, .stSidebar span, .stSidebar label {
+            color: #1f1f1f !important;
+        }
+
+        .stSidebar .stSelectbox div,
+        .stSidebar .stTextInput input {
+            background-color: #ffffff !important;
+            color: #1f1f1f !important;
+            border: 1px solid #d0d0d0 !important;
+        }
+
+        /* Radio buttons */
+        .stRadio > label,
+        .stRadio div[role="radiogroup"] label,
+        .stRadio div[role="radiogroup"] label p {
+            color: #1f1f1f !important;
+        }
+
+        /* ===============================
+           Chat bubbles
+           =============================== */
         .chat-bubble {
             padding: 1rem;
             border-radius: 1rem;
@@ -93,67 +274,58 @@ st.markdown("""
         }
 
         .assistant-bubble {
-            background-color: #343541;
-            color: white;
+            background-color: #f7f7f8;
+            color: #1f1f1f;
             margin-right: auto;
             text-align: left;
+            border: 1px solid #e0e0e0;
         }
 
-        .bottom-input {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background: #1e1e1e;
-            padding: 1rem 2rem;
-            box-shadow: 0 -1px 3px rgba(0,0,0,0.3);
-            z-index: 999;
-        }
-
+        /* ===============================
+           Other form elements
+           =============================== */
         .stTextInput>div>input {
             padding: 0.75rem 1rem !important;
             border-radius: 1rem !important;
             font-size: 1rem !important;
-            background-color: #2c2c2c !important;
-            color: white !important;
-            border: 1px solid #555 !important;
+            background-color: #f7f7f8 !important;
+            color: #1f1f1f !important;
+            border: 1px solid #d0d0d0 !important;
         }
 
-        .stSidebar {
-            background-color: #121212 !important;
-            color: #e0e0e0 !important;
+        /* Tabs */
+        .stTabs [data-baseweb="tab-list"] button,
+        .stTabs [data-baseweb="tab-list"] button * {
+            color: #1f1f1f !important;
         }
 
-        /* Make all buttons start with darker color (like APC Research page) */
-        .stButton > button,
-        .stDownloadButton > button,
-        .stFormSubmitButton > button,
-        .stSidebar .stButton > button,
-        button[kind="primary"],
-        button[kind="secondary"] {
-            background-color: rgb(43, 44, 54) !important;
-            color: rgb(255, 255, 255) !important;
-        }
-        
-        /* Even darker on hover */
-        .stButton > button:hover,
-        .stDownloadButton > button:hover,
-        .stFormSubmitButton > button:hover,
-        .stSidebar .stButton > button:hover,
-        button[kind="primary"]:hover,
-        button[kind="secondary"]:hover {
-            background-color: rgb(28, 29, 35) !important;
-            color: rgb(255, 255, 255) !important;
+        /* Selectbox */
+        .stSelectbox label, .stSelectbox * {
+            color: #1f1f1f !important;
         }
 
-        .stSidebar .stSelectbox div,
-        .stSidebar .stTextInput input {
-            background-color: #d3d3d3 !important;
-            color: black !important;
-            border: 1px solid #aaa !important;
+        /* Checkbox */
+        .stCheckbox label, .stCheckbox * {
+            color: #1f1f1f !important;
+        }
+
+        /* Tables */
+        .stDataFrame, .stDataFrame *, .stTable, .stTable * {
+            color: #1f1f1f !important;
+        }
+
+        /* Expanders */
+        .streamlit-expanderHeader, .streamlit-expanderHeader * {
+            color: #1f1f1f !important;
+        }
+
+        /* Alerts */
+        .stAlert, .stAlert * {
+            color: #1f1f1f !important;
         }
     </style>
 """, unsafe_allow_html=True)
+
 
 # Session setup
 if "session_id" not in st.session_state:
@@ -196,13 +368,13 @@ with st.sidebar:
     st.markdown("""
         <style>
             .stRadio > label {
-                color: #ffffff !important;
+                color: #1f1f1f !important;
             }
             .stRadio div[role="radiogroup"] label {
-                color: #ffffff !important;
+                color: #1f1f1f !important;
             }
             .stRadio div[role="radiogroup"] label p {
-                color: #ffffff !important;
+                color: #1f1f1f !important;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -332,7 +504,7 @@ except Exception as e:
 if st.session_state.show_feedback:
     render_feedback_page()
 elif st.session_state.app_mode == "APC":
-    apc_research.render_apc_interface()
+    render_apc_interface()
 else:
     # Topic display
     st.subheader(f"💬 Topic: {st.session_state.topic}")
