@@ -9,6 +9,7 @@ from datetime import datetime
 import os
 import boto3
 from io import BytesIO
+from pathlib import Path
 
 
 def download_ptp_table_from_s3():
@@ -52,15 +53,15 @@ def download_ptp_table_from_s3():
             header=2,  # Use row 2 (0-indexed) as header
             skiprows=[3, 4, 5]  # Skip rows 3, 4, 5 (0-indexed)
         )
-        
         print(f"✅ Loaded {len(df)} records")
         print(f"📋 Original columns: {list(df.columns)}")
-        import pdb; pdb.set_trace()
+        
         return df
         
     except Exception as e:
         print(f"❌ Error downloading from S3: {str(e)}")
         raise
+
 
 
 def clean_column_names(df):
@@ -83,11 +84,13 @@ def clean_column_names(df):
         DataFrame with cleaned column names
     """
     print("\n🔄 Cleaning column names...")
+    print(f"   Original columns: {list(df.columns)}")
     
-    # Define standard column names
+    # Define standard column names based on actual Excel structure
+    # You can also rename by position if column names vary
     column_mapping = {
-        'Column 1': 'Code_1',
-        'Column 2': 'Code_2',
+        'Column 1': 'CPT_code_1',
+        'Column 2': 'CPT_code_2',
         '*=in existence': 'In_Existence',
         'Effective': 'Effective_Date',
         'Deletion': 'Deletion_Date',
@@ -95,50 +98,53 @@ def clean_column_names(df):
         'PTP Edit Rationale': 'PTP_Edit_Rationale'
     }
     
+    # Alternative: Rename by column position (more robust if column names have variations)
+    # df.columns = ['CPT_code_1', 'CPT_code_2', 'In_Existence', 'Effective_Date', 'Deletion_Date', 'Modifier', 'PTP_Edit_Rationale']
+    
     # Rename columns that exist in the mapping
     df_cleaned = df.rename(columns=column_mapping)
     
     # Remove any unnamed columns
-    df_cleaned = df_cleaned.loc[:, ~df_cleaned.columns.str.contains('^Unnamed')]
+    df_cleaned = df_cleaned.loc[:, ~df_cleaned.columns.str.contains('^Unnamed', na=False)]
     
     print(f"📋 Cleaned columns: {list(df_cleaned.columns)}")
-    
     return df_cleaned
 
-
-
-def save_to_local(df, filename="ptp_edit_table.csv"):
+def subset_save_df(df):
     """
-    Save processed data to local data folder
+    Subset DataFrame and save to local data folder
     
     Args:
-        df: DataFrame to save
-        filename: Output filename
+        df: Input DataFrame
         
     Returns:
-        Path to saved file
+        Tuple of (modifier_0_filename, modifier_1_filename)
     """
-    print(f"\n💾 Saving to local data folder...")
+    print("\n💾 Subsetting and saving PTP edit data...")
+    output_dir = Path("output")
+    os.makedirs(output_dir, exist_ok=True)
+    modifier_0_filename = "output/preprocessed_ptp_edit_table_modifier0.csv"
+    modifier_1_filename = "output/preprocessed_ptp_edit_table_modifier1.csv"
+   
+    # Convert Effective_Date to numeric for comparison if it's not already
+    # Ensure proper date comparison (20230101 format)
+    # Note: Deletion_Date uses '*' to indicate "no deletion date", not NaN
+    print(f"   Filtering records with Effective_Date >= 20230101 and Deletion_Date='*' (active records)...")
     
-    # Get the project root directory
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(os.path.dirname(current_dir))
-    data_folder = os.path.join(project_root, 'data')
+    modifier_0_df = df[(df['Modifier'] == 0) & (df['Effective_Date'] >= 20230101) & (df['Deletion_Date'] == '*')]
+    modifier_1_df = df[(df['Modifier'] == 1) & (df['Effective_Date'] >= 20230101) & (df['Deletion_Date'] == '*')]
     
-    # Create data folder if it doesn't exist
-    os.makedirs(data_folder, exist_ok=True)
-    
-    output_path = os.path.join(data_folder, filename)
+    print(f"   Modifier 0 (not allowed): {len(modifier_0_df)} records")
+    print(f"   Modifier 1 (allowed): {len(modifier_1_df)} records")
     
     # Save to CSV
-    df.to_csv(output_path, index=False)
+    modifier_0_df.to_csv(modifier_0_filename, index=False)
+    modifier_1_df.to_csv(modifier_1_filename, index=False)
     
-    print(f"✅ Saved to: {output_path}")
-    print(f"   Records: {len(df)}")
-    print(f"   Columns: {len(df.columns)}")
+    print(f"✅ Saved Modifier 0 data to: {modifier_0_filename}")
+    print(f"✅ Saved Modifier 1 data to: {modifier_1_filename}")
     
-    return output_path
-
+    return modifier_0_filename, modifier_1_filename
 
 def main():
     """Main preprocessing pipeline"""
@@ -152,38 +158,23 @@ def main():
     # Step 2: Clean column names
     df_cleaned = clean_column_names(df)
     
-    # Step 3: Preview data
-    print(f"\n🔍 Data preview:")
-    print(df_cleaned.head())
+    # Step 3: Basic data quality checks
+    print("\n📊 Data Quality Summary:")
+    print(f"   Total records: {len(df_cleaned)}")
+    print(f"   Modifier distribution:")
+    print(f"      {df_cleaned['Modifier'].value_counts().to_dict()}")
+    print(f"   Date range:")
+    print(f"      Effective: {df_cleaned['Effective_Date'].min()} to {df_cleaned['Effective_Date'].max()}")
+    print(f"   Records with Deletion Date: {df_cleaned['Deletion_Date'].notna().sum()}")
     
     # Step 4: Save to local data folder
-    output_path = save_to_local(df_cleaned)
-    
-    # Print summary statistics
-    print("\n" + "=" * 80)
-    print("SUMMARY STATISTICS")
-    print("=" * 80)
-    print(f"Total records: {len(df_cleaned)}")
-    print(f"Columns: {list(df_cleaned.columns)}")
-    
-    if 'Effective_Date' in df_cleaned.columns:
-        print(f"\nEffective Date Range:")
-        print(f"   Earliest: {df_cleaned['Effective_Date'].min()}")
-        print(f"   Latest: {df_cleaned['Effective_Date'].max()}")
-    
-    if 'Code_1' in df_cleaned.columns:
-        print(f"\nUnique Code_1 values: {df_cleaned['Code_1'].nunique()}")
-    
-    if 'Code_2' in df_cleaned.columns:
-        print(f"Unique Code_2 values: {df_cleaned['Code_2'].nunique()}")
+    modifier_0_filename, modifier_1_filename = subset_save_df(df_cleaned)
     
     print("\n" + "=" * 80)
-    print("✅ Processing Complete!")
-    print(f"📁 Output file: {output_path}")
+    print("✅ PTP Edit Table Preprocessing Complete!")
     print("=" * 80)
     
-    return df_cleaned, output_path
-
+    return df_cleaned, modifier_0_filename, modifier_1_filename
 
 if __name__ == "__main__":
     main()
