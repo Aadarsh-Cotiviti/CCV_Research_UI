@@ -7,7 +7,7 @@ used across all view modules.
 
 import streamlit as st
 from datetime import datetime
-from services import report_service
+from services import final_assessment_service
 from services.utils import save_accuracy_feedback, save_chat_message, get_chat_history
 from services.apc_orchestrator import chat_with_section
 
@@ -330,7 +330,7 @@ def render_export_buttons(analysis_result, cpt_code, idx=0):
     
     with col_a:
         # Excel download
-        excel_file = report_service.create_excel_output(analysis_result, cpt_code)
+        excel_file = final_assessment_service.create_excel_output(analysis_result, cpt_code)
         st.download_button(
             label="📊 Download as Excel",
             data=excel_file,
@@ -341,7 +341,7 @@ def render_export_buttons(analysis_result, cpt_code, idx=0):
     
     with col_b:
         # PDF download
-        pdf_file = report_service.create_pdf_output(analysis_result, cpt_code)
+        pdf_file = final_assessment_service.create_pdf_output(analysis_result, cpt_code)
         st.download_button(
             label="📑 Download as PDF",
             data=pdf_file,
