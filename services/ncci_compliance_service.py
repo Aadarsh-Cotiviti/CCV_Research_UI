@@ -361,6 +361,7 @@ def load_cached_results(target_cpt):
             "analysis_content": cached_data.get("analysis_content", ""),
             "ptp_tables_by_cpt": cached_data.get("ptp_tables_by_cpt", cached_data.get("ptp_tables", {})),
             "ncci_manual_by_cpt": cached_data.get("ncci_manual_by_cpt", {}),
+            "ncci_chunk_details_by_cpt": cached_data.get("ncci_chunk_details_by_cpt", {}),  # ADDED: Load chunk details for citations
             "neighboring_codes": cached_data.get("neighboring_codes", []),
             "cpt_descriptions": cached_data.get("cpt_descriptions", {}),
             "source": cached_data.get("source", "llm")
@@ -368,6 +369,12 @@ def load_cached_results(target_cpt):
         
         print(f"✅ Loaded cached results from {output_path}")
         print(f"   Cache timestamp: {cached_data.get('update_time', 'Unknown')}")
+        
+        # Debug: Print chunk details info
+        chunk_details = result.get("ncci_chunk_details_by_cpt", {})
+        if chunk_details:
+            total_chunks = sum(len(chunks) for chunks in chunk_details.values())
+            print(f"   📄 Loaded {total_chunks} chunk details across {len(chunk_details)} CPT codes")
         
         return result
         
