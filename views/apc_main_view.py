@@ -396,7 +396,9 @@ def render_step3():
     with tabs[-1]:
         final_assessment_view.render_section(
             cpt_code=analysis_data['cpt_code'],
-            session_id=st.session_state.session_id
+            model=analysis_data.get('model', 'gpt-4.1-mini'),
+            session_id=st.session_state.session_id,
+            idx=999  # Unique index for final assessment
         )
     
     # Display section accuracy summary if any sections were rated
