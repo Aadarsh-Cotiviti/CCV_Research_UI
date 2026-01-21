@@ -1,92 +1,95 @@
-# CCV Research UI - Refactored Version 2.0 🚀
+# CCV Research UI – Refactored (Backend + Frontend) 🚀
 
-A modular, scalable APC (Ambulatory Payment Classification) research application built with Streamlit.
+A modular APC (Ambulatory Payment Classification) research application with:
 
-## ✨ What's New in V2.0
+- Backend: Streamlit UI (legacy) plus new FastAPI endpoints for programmatic access
+- Frontend: Next.js 16 portal (auth, chat UI, libsql/Drizzle persistence)
 
-- **🏗️ Modular Architecture**: Complete separation of Services (business logic) and Views (UI components)
-- **🤖 Agent-Ready**: Each research section is designed as an independent agent for future agentic workflows
-- **📁 Organized Structure**: Clean directory layout with dedicated data/ and output/ folders
-- **🔧 Better Maintainability**: Reusable components and single-responsibility modules
-- **📊 Enhanced Testing**: Validation scripts to ensure code integrity
+## ✨ Highlights
+
+- **FastAPI layer** for the APC services (mirrors Streamlit flows)
+- **Agent-ready services**: each section is independently runnable
+- **Frontend portal** with Okta auth, chat, libsql/Drizzle
+- **Organized data/output** directories; SQLite auto-created
+
+git clone <repository-url>
 
 ## 🚀 Quick Start
 
-### 1. Installation
+### Backend (Python)
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd CCV_Research_UI_Dev
-
-# Install dependencies
+cd backend
 pip install -r requirements.txt
 ```
 
-### 2. Data Setup
+Data prerequisite: place `CPT Codes with Long Descriptions 2025.xlsx` under `backend/data/`.
 
-Place the following file in the `data/` directory:
-- `CPT Codes with Long Descriptions 2025.xlsx`
-
-All database files will be automatically created on first run in the `data/` directory.
-
-### 3. Run the Application
+Run Streamlit UI (legacy):
 
 ```bash
+cd backend
 streamlit run app.py
 ```
 
-### 4. Validate Installation (Optional)
+Run FastAPI (new):
 
 ```bash
-python3 test_refactored_code.py
+cd backend
+uvicorn api:app --reload
 ```
 
-## 📂 Project Structure
+Optional validation:
+
+```bash
+cd backend
+python test_refactored_code.py
+```
+
+### Frontend (Next.js 16)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Env vars: `NEXT_PUBLIC_AUTH_OKTA_*`, `NEXT_PUBLIC_BASE_URL`, `NEXT_PUBLIC_POST_LOGOUT`, `DB_URL` (libsql file), Azure OpenAI keys.
+
+## 📂 Project Structure (high level)
 
 ```
-CCV_Research_UI_Dev/
-├── app.py                      # Main application entry point
-├── llm_wrapper.py              # LLM integration wrapper
-├── db.py                       # Database utilities (legacy)
-├── feedback.py                 # Feedback system (legacy)
-├── personas.py                 # Persona management (legacy)
-├── requirements.txt            # Python dependencies
-├── MIGRATION_GUIDE.md          # Detailed migration documentation
-├── test_refactored_code.py     # Validation test script
-│
-├── data/                       # 📁 Data files directory
-│   ├── *.db                    # SQLite databases (auto-created)
-│   └── CPT Codes with Long Descriptions 2025.xlsx
-│
-├── output/                     # 📁 Generated reports directory
-│   ├── *.pdf                   # PDF reports
-│   └── *.xlsx                  # Excel reports
-│
-├── services/                   # ⚙️ Business Logic Layer
-│   ├── __init__.py
-│   ├── utils.py                       # Database operations & utilities
-│   ├── cpt_service.py                 # CPT code generation
-│   ├── code_description_service.py     # Section 1: Code Description
-│   ├── guideline_examination_service.py # Section 2: Guideline Examination
-│   ├── payment_rate_service.py         # Section 3: Payment Rate & Policy
-│   ├── device_code_service.py          # Section 4: Device Code
-│   ├── ncci_compliance_service.py      # Section 5: NCCI Compliance
-│   ├── reference_material_service.py   # Section 6: Reference Material
-│   ├── apc_orchestrator.py            # Workflow orchestration
-│   └── report_service.py              # PDF/Excel report generation
-│
-└── views/                      # 🖥️ User Interface Layer
-    ├── __init__.py
-    ├── utils.py                       # Shared UI components
-    ├── apc_main_view.py               # Main workflow interface
-    ├── code_description_view.py       # Section 1 UI
-    ├── guideline_examination_view.py  # Section 2 UI
-    ├── payment_rate_view.py           # Section 3 UI
-    ├── device_code_view.py            # Section 4 UI
-    ├── ncci_compliance_view.py        # Section 5 UI
-    ├── reference_material_view.py     # Section 6 UI
-    └── final_assessment_view.py       # Final Assessment UI
+backend/
+├── api.py                  # FastAPI entrypoint (uvicorn api:app --reload)
+├── api_schemas.py          # Pydantic request models
+├── app.py                  # Streamlit UI entry
+├── llm_wrapper.py          # Azure OpenAI / MedGEMMA client config
+├── db.py, feedback.py      # Legacy chat/feedback helpers
+├── personas.py             # Legacy persona config
+├── requirements.txt
+├── data/                   # SQLite files (auto), CPT Excel
+├── output/                 # Cached findings, exports
+├── services/               # APC business logic (agentic sections)
+│   ├── apc_orchestrator.py # conduct_section_research/run_all, chat helpers
+│   ├── cpt_service.py      # CPT generation/parsing
+│   ├── code_description_service.py ... (section 1)
+│   ├── guideline_examination_service.py (section 2)
+│   ├── payment_rate_service.py (section 3)
+│   ├── device_code_service.py (section 4)
+│   ├── ncci_compliance_service.py (section 5)
+│   ├── reference_material_service.py (section 6)
+│   ├── utils.py            # DB helpers (notes, chat, sessions, feedback)
+│   └── common/             # Shared CPT description utilities, etc.
+└── views/                  # Streamlit view components (legacy UI)
+
+frontend/
+├── app/                    # Next.js app router
+├── components/             # UI components (chat, auth, notes, etc.)
+├── lib/                    # db.ts (Drizzle/libsql), llm.ts, okta.ts, chat.ts
+├── db/schemas.ts           # Drizzle schema
+├── public/
+├── package.json, tsconfig.json, etc.
+└── data/                   # Frontend CPT descriptions JSON
 ```
 
 ## 🎯 Key Features
@@ -126,12 +129,14 @@ CCV_Research_UI_Dev/
 ## 🧪 Architecture Principles
 
 ### Services Layer (Business Logic)
+
 - **Pure Functions**: Testable, predictable business logic
 - **Agent-Ready**: Each service can operate independently
 - **Database Abstraction**: Centralized data operations
 - **LLM Integration**: Unified prompt building and parsing
 
 ### Views Layer (UI Components)
+
 - **Component-Based**: Modular, reusable UI elements
 - **State Management**: Streamlit session_state integration
 - **Shared Components**: Common UI patterns in utils
@@ -140,12 +145,16 @@ CCV_Research_UI_Dev/
 ## 🔧 Configuration
 
 ### LLM Models
+
 Configure in `llm_wrapper.py`:
+
 - Azure OpenAI (GPT-4.1, GPT-5 variants)
 - Custom MedGEMMA model
 
 ### Database
+
 All databases auto-initialize in `data/` directory:
+
 - `apc_notes.db` - Research notes
 - `apc_chat.db` - Chat history
 - `apc_feedback.db` - User feedback
@@ -168,6 +177,7 @@ python3 test_refactored_code.py
 ```
 
 This will check:
+
 - ✅ Module imports
 - ✅ Directory structure
 - ✅ Database path configuration
@@ -205,6 +215,7 @@ This will check:
 ## 🚀 Future Enhancements
 
 ### Planned Features
+
 - [ ] Unit tests for all service modules
 - [ ] Agent-to-agent communication protocol
 - [ ] Parallel section execution
@@ -214,7 +225,9 @@ This will check:
 - [ ] API endpoints for programmatic access
 
 ### Agentic Workflow
+
 Each section service is designed to become an autonomous agent:
+
 - Independent execution capability
 - Standardized input/output interfaces
 - Inter-agent communication ready
@@ -234,6 +247,6 @@ Each section service is designed to become an autonomous agent:
 
 ---
 
-**Version**: 2.0  
-**Last Updated**: 2025.1.3  
-**Architecture**: Modular Services/Views Pattern
+**Version**: 2.1  
+**Last Updated**: 2026-01-19  
+**Architecture**: Modular Services/Views with FastAPI layer

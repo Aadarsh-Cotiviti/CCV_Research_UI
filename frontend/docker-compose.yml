@@ -1,0 +1,28 @@
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DB_URL: data/sqlite.db
+      SESSION_JWT_SECRET: change-me
+      NEXT_PUBLIC_AUTH_OKTA_ISSUER: ""
+      NEXT_PUBLIC_AUTH_OKTA_ID: ""
+      AZURE_OPENAI_API_KEY: ""
+      AZURE_OPENAI_ENDPOINT: ""
+      AZURE_OPENAI_API_KEY_GPT_5: ""
+      AZURE_OPENAI_ENDPOINT_GPT_5: ""
+      AZURE_OPENAI_API_KEY_GPT_5_MINI: ""
+      AZURE_OPENAI_ENDPOINT_GPT_5_MINI: ""
+      AZURE_OPENAI_API_KEY_GPT_5_NANO: ""
+      AZURE_OPENAI_ENDPOINT_GPT_5_NANO: ""
+      MEDGEMMA_MODEL_URL: ""
+    env_file:
+      - .env.local
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

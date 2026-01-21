@@ -1,41 +1,54 @@
-# Byte-compiled / optimized / DLL files
+# Environment
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
-*.so
-
-# Database files
-*.db
-*.sqlite3
-
-# Jupyter Notebook checkpoints
-.ipynb_checkpoints/
-
-# Environment files
-.env
 .venv/
 venv/
-ENV/
 env/
+ENV/
+.ipynb_checkpoints/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg
+*.egg-info/
 
-# VS Code settings
+# Node / Next.js
+node_modules/
+.pnp
+.pnp.*
+.next/
+out/
+build/
+dist/
+.turbo/
+.vercel/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Databases and storage artifacts
+*.db
+*.db-wal
+*.db-shm
+sqlite.db
+
+# Logs
+*.log
+
+# Editor / OS
 .vscode/
-
-# OS generated files
+.idea/
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# Application logs
-*.log
-
-# Python egg files
-*.egg
-*.egg-info/
-dist/
-build/
-
-# Ignore Windows shortcuts
-*.lnk
