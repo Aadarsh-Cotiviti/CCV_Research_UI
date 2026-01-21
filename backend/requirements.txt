@@ -7,3 +7,6 @@ reportlab
 python-dotenv
 boto3
 tabulate
+regex
+rank-bm25
+chromadb

@@ -1,0 +1,94 @@
+{
+  "service": "section 1 - code description with desc",
+  "update_time": "20260121_133952",
+  "neighbouring_codes": [
+    {
+      "cpt_code": "31622",
+      "description": "Bronchoscopy, rigid or flexible, including fluoroscopic guidance, when performed; diagnostic, with cell washing, when performed (separate procedure)",
+      "source": "internal_kb"
+    },
+    {
+      "cpt_code": "31623",
+      "description": "Bronchoscopy, rigid or flexible, including fluoroscopic guidance, when performed; with brushing or protected brushings",
+      "source": "internal_kb"
+    },
+    {
+      "cpt_code": "31624",
+      "description": "Bronchoscopy, rigid or flexible, including fluoroscopic guidance, when performed; with bronchial alveolar lavage",
+      "source": "internal_kb"
+    },
+    {
+      "cpt_code": "31625",
+      "description": "Bronchoscopy, rigid or flexible, including fluoroscopic guidance, when performed; with bronchial or endobronchial biopsy(s), single or multiple sites",
+      "source": "internal_kb"
+    },
+    {
+      "cpt_code": "31626",
+      "description": "Bronchoscopy, rigid or flexible, including fluoroscopic guidance, when performed; with placement of fiducial markers, single or multiple",
+      "source": "internal_kb"
+    },
+    {
+      "cpt_code": "31628",
+      "description": "Bronchoscopy, rigid or flexible, including fluoroscopic guidance, when performed; with transbronchial lung biopsy(s), single lobe",
+      "source": "internal_kb"
+    }
+  ],
+  "internal_recoding_result": [],
+  "internal_llm_recoding_result": [
+    {
+      "cpt_code": "31622",
+      "description": "Bronchoscopy, rigid or flexible, including fluoroscopic guidance, when performed; diagnostic, with cell washing, when performed (separate procedure)",
+      "description_source": "internal_kb",
+      "llm_recoding": {
+        "recoding_possibilities": "1. Alternative codes include 31623 for a more extensive bronchial or tracheal procedure involving 2 segments; use 31623 when more than one segment is involved. HCPCS G0297 may be used for diagnostic bronchoscopy with BAL when limited to lavage only. 2. Bundling: CPT 31622 is often bundled with bronchoscopy codes like 31622 with 31623 or 31624; modifier 59 or XS may be needed if performed separately and documentation supports separate procedural work. Check payer policies on bundling with biopsy codes (e.g., 31628) as some payers bundle biopsy with bronchoscopy. 3. Common errors include coding 31622 when performing only diagnostic bronchoscopy without segmental or subsegmental procedures, or failing to apply modifiers when multiple procedures are done. Documentation must clearly support extent of bronchial involvement.",
+        "source": "llm"
+      }
+    },
+    {
+      "cpt_code": "31623",
+      "description": "Bronchoscopy, rigid or flexible, including fluoroscopic guidance, when performed; with brushing or protected brushings",
+      "description_source": "internal_kb",
+      "llm_recoding": {
+        "recoding_possibilities": "1. Use 31622 when only one segment is involved; 31624 for multiple segments or lobes. HCPCS codes may be considered if the procedure is limited to lavage or diagnostic only. 2. Bundling: 31623 is typically bundled with biopsy codes like 31628; separate reporting requires modifiers per payer guidance. Some payers bundle this with anesthesia or imaging services. 3. Common mistakes include overcoding extent of resection or failing to document specific segments involved; incorrect use when only diagnostic bronchoscopy is performed without intervention.",
+        "source": "llm"
+      }
+    },
+    {
+      "cpt_code": "31624",
+      "description": "Bronchoscopy, rigid or flexible, including fluoroscopic guidance, when performed; with bronchial alveolar lavage",
+      "description_source": "internal_kb",
+      "llm_recoding": {
+        "recoding_possibilities": "1. Use 31622 or 31623 for fewer segments; 31625 or 31626 for extended procedures. HCPCS codes apply for lavage-only procedures. 2. Bundling: Often bundled with bronchial biopsy or brushing codes; use modifier 59 or XS if procedures are distinct and separately documented. Verify with payer-specific policies as some bundle diagnostic and therapeutic bronchoscopies. 3. Common errors: Overcoding extent of procedure, lack of clear documentation on number of segments or lobes involved, failure to apply modifiers for multiple procedures.",
+        "source": "llm"
+      }
+    },
+    {
+      "cpt_code": "31625",
+      "description": "Bronchoscopy, rigid or flexible, including fluoroscopic guidance, when performed; with bronchial or endobronchial biopsy(s), single or multiple sites",
+      "description_source": "internal_kb",
+      "llm_recoding": {
+        "recoding_possibilities": "1. Use 31624 for fewer segments; 31626 for even more extensive airway involvement. HCPCS codes for lavage-only procedures. 2. Bundling: 31625 frequently bundled with related biopsy or therapeutic codes; modifiers necessary when performed separately. Payers may bundle with anesthesia or imaging; check policies. 3. Coding errors include miscoding extent of procedure, missing documentation on airway segments involved, and improperly reporting when only diagnostic bronchoscopy performed.",
+        "source": "llm"
+      }
+    },
+    {
+      "cpt_code": "31626",
+      "description": "Bronchoscopy, rigid or flexible, including fluoroscopic guidance, when performed; with placement of fiducial markers, single or multiple",
+      "description_source": "internal_kb",
+      "llm_recoding": {
+        "recoding_possibilities": "1. Use 31625 or 31624 for fewer airway segments. HCPCS codes may replace when only lavage or diagnostic bronchoscopy is done. 2. Bundling: Typically bundled with biopsy or therapeutic bronchoscopic codes; separate coding requires modifiers such as 59 or XS based on payer rules. Some payers bundle with anesthesia or imaging services; verify. 3. Common pitfalls include lack of documentation supporting the extensive airway involvement, miscoding when procedure is purely diagnostic, and failure to apply correct modifiers for multiple procedures.",
+        "source": "llm"
+      }
+    },
+    {
+      "cpt_code": "31628",
+      "description": "Bronchoscopy, rigid or flexible, including fluoroscopic guidance, when performed; with transbronchial lung biopsy(s), single lobe",
+      "description_source": "internal_kb",
+      "llm_recoding": {
+        "recoding_possibilities": "1. Alternative codes include 31629 (transbronchial lung biopsy) when lung tissue is sampled rather than bronchial tissue. Use 31622-31626 for bronchoscopy without biopsy. 2. Bundling: Often bundled with bronchoscopy codes (31622-31626); separate reporting requires modifier 59 or XS with proper documentation. Some payers bundle biopsy with bronchoscopy; check specific payer guidelines. 3. Common errors: Reporting biopsy without corresponding bronchoscopy, lack of documentation supporting biopsy site, failure to use modifiers when multiple biopsies or procedures are performed.",
+        "source": "llm"
+      }
+    }
+  ],
+  "external_full_llm_result": []
+}

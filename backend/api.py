@@ -16,31 +16,18 @@ from fastapi.responses import JSONResponse
 from fastapi.concurrency import run_in_threadpool
 
 from api_schemas import (
-    AccuracyFeedbackRequest,
     ChatRequest,
     GenerateCptRequest,
-    NcciRetrieveRequest,
-    NotesRequest,
     ResearchSectionRunRequest,
     RunAllRequest,
-    SessionCreateRequest,
-    SessionUpdateRequest,
 )
 from llm_wrapper import query_llm
 from services import apc_orchestrator
 from services.cpt_service import get_cpt_codes_for_topic
 from services.utils import (
-    delete_research_session,
-    get_accuracy_feedback,
-    get_all_research_sessions,
     get_chat_history,
-    get_notes,
     get_research_session,
-    save_accuracy_feedback,
     save_chat_message,
-    save_notes,
-    save_research_session,
-    update_research_topic,
 )
 from services.common import get_or_generate_cpt_description
 from services.final_assessment_service import create_excel_output, create_pdf_output
@@ -66,17 +53,17 @@ async def generate_cpt(req: GenerateCptRequest):
     return await run_in_threadpool(get_cpt_codes_for_topic, req.topic, req.model)
 
 
-@app.get("/cpt/{code}/description")
-async def get_cpt_description(code: str, use_llm_fallback: bool = Query(False)):
-    desc = await run_in_threadpool(
-        get_or_generate_cpt_description,
-        code,
-        "gpt-4.1-mini",
-        use_llm_fallback,
-    )
-    if not desc:
-        raise HTTPException(404, detail="CPT description not found")
-    return desc
+# @app.get("/cpt/{code}/description")
+# async def get_cpt_description(code: str, use_llm_fallback: bool = Query(False)):
+#     desc = await run_in_threadpool(
+#         get_or_generate_cpt_description,
+#         code,
+#         "gpt-4.1-mini",
+#         use_llm_fallback,
+#     )
+#     if not desc:
+#         raise HTTPException(404, detail="CPT description not found")
+#     return desc
 
 
 @app.post("/research/sections/{section_id}/run")

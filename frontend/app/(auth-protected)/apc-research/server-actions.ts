@@ -4,48 +4,35 @@ import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import { ResponsesModel } from "openai/resources/shared.mjs";
 import { z } from "zod/v4";
+import { generateCpts } from "@/lib/backendClient";
 
-const generateCptCodeFromTopic = (topic: string) => {
-  const prompt = `
-You are a medical coding expert. Given the following medical procedure or condition topic, provide the top 5 most relevant CPT codes.
-Topic: ${topic}
+// const generateCptCodeFromTopic = (topic: string) => {
+//   const prompt = `
+// You are a medical coding expert. Given the following medical procedure or condition topic, provide the top 5 most relevant CPT codes.
+// Topic: ${topic}
 
-For each CPT code, provide:
-1. The CPT code number
-2. A brief description (one line)
-3. A title for the CPT code. Keep it concise.
+// For each CPT code, provide:
+// 1. The CPT code number
+// 2. A brief description (one line)
+// 3. A title for the CPT code. Keep it concise.
 
-Provide exactly 5 CPT codes. If the topic is too vague or unclear, provide the most commonly associated codes.
-`;
+// Provide exactly 5 CPT codes. If the topic is too vague or unclear, provide the most commonly associated codes.
+// `;
 
-  const messages = [
-    {
-      role: "system",
-      content: "You are an expert medical coding specialist with deep knowledge of CPT codes.",
-    },
-    { role: "user", content: prompt },
-  ];
-  return messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[];
-};
+//   const messages = [
+//     {
+//       role: "system",
+//       content: "You are an expert medical coding specialist with deep knowledge of CPT codes.",
+//     },
+//     { role: "user", content: prompt },
+//   ];
+//   return messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[];
+// };
 
-const topicChoices = z.object({
-  cpt_codes_and_descriptions: z.array(
-    z.object({
-      code: z.string(),
-      title: z.string(),
-      description: z.string(),
-    })
-  ),
-});
-
-export type CptData = z.infer<typeof topicChoices>["cpt_codes_and_descriptions"][number];
+// export type CptData = z.infer<typeof topicChoices>["cpt_codes_and_descriptions"][number];
 
 export const fetchCptCodes = async (topic: string, model: ResponsesModel) => {
-  return await queryllm<z.infer<typeof topicChoices>>(
-    generateCptCodeFromTopic(topic),
-    model,
-    zodResponseFormat(topicChoices, "cpt_codes_and_descriptions")
-  );
+  return await generateCpts(topic, model);
 };
 
 const computeAuditWindow = () => {
@@ -159,7 +146,7 @@ const sectionStructure = z.object({
     z.object({
       title: z.string(),
       content: z.string(),
-    })
+    }),
   ),
 });
 
@@ -168,7 +155,7 @@ export type ResearchSection = z.infer<typeof sectionStructure>["sections"][numbe
 export const createResearch = async (
   targetCpt: string,
   contextDetails: string,
-  model: ResponsesModel
+  model: ResponsesModel,
 ) => {
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     {
@@ -180,7 +167,7 @@ export const createResearch = async (
   const response = await queryllm<z.infer<typeof sectionStructure>>(
     messages,
     model,
-    zodResponseFormat(sectionStructure, "sections")
+    zodResponseFormat(sectionStructure, "sections"),
   );
   return response.sections;
 };
