@@ -108,14 +108,14 @@ async def run_all(req: RunAllRequest):
     return result
 
 
-@app.get("/research/sections/1/cached")
-async def get_section1_cache(cpt: str = Query(...)):
-    path = _section1_cache_path(cpt)
-    if not path.exists():
-        raise HTTPException(404, detail="No cache for section 1")
-    with path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
-    return data
+# @app.get("/research/sections/1/cached")
+# async def get_section1_cache(cpt: str = Query(...)):
+#     path = _section1_cache_path(cpt)
+#     if not path.exists():
+#         raise HTTPException(404, detail="No cache for section 1")
+#     with path.open("r", encoding="utf-8") as f:
+#         data = json.load(f)
+#     return data
 
 
 @app.post("/research/sections/{section_id}/chat")
@@ -137,74 +137,74 @@ async def chat_section(section_id: str, req: ChatRequest):
         raise HTTPException(400, detail=str(exc)) from exc
 
 
-@app.get("/research/sections/{section_id}/chat")
-async def get_chat(section_id: str, session_id: str, cpt: str):
-    return await run_in_threadpool(get_chat_history, session_id, cpt, section_id)
+# @app.get("/research/sections/{section_id}/chat")
+# async def get_chat(section_id: str, session_id: str, cpt: str):
+#     return await run_in_threadpool(get_chat_history, session_id, cpt, section_id)
 
 
-@app.get("/sessions")
-async def list_sessions():
-    return await run_in_threadpool(get_all_research_sessions)
+# @app.get("/sessions")
+# async def list_sessions():
+#     return await run_in_threadpool(get_all_research_sessions)
 
 
-@app.post("/sessions")
-async def create_session(req: SessionCreateRequest):
-    await run_in_threadpool(
-        save_research_session,
-        req.session_id,
-        req.topic,
-        req.cpt,
-        req.model,
-        req.analysis_result,
-    )
-    return {"session_id": req.session_id}
+# @app.post("/sessions")
+# async def create_session(req: SessionCreateRequest):
+#     await run_in_threadpool(
+#         save_research_session,
+#         req.session_id,
+#         req.topic,
+#         req.cpt,
+#         req.model,
+#         req.analysis_result,
+#     )
+#     return {"session_id": req.session_id}
 
 
-@app.get("/sessions/{session_id}")
-async def get_session(session_id: str):
-    session = await run_in_threadpool(get_research_session, session_id)
-    if not session:
-        raise HTTPException(404, detail="Session not found")
-    return session
+# @app.get("/sessions/{session_id}")
+# async def get_session(session_id: str):
+#     session = await run_in_threadpool(get_research_session, session_id)
+#     if not session:
+#         raise HTTPException(404, detail="Session not found")
+#     return session
 
 
-@app.patch("/sessions/{session_id}")
-async def patch_session(session_id: str, req: SessionUpdateRequest):
-    await run_in_threadpool(update_research_topic, session_id, req.topic)
-    return {"session_id": session_id, "topic": req.topic}
+# @app.patch("/sessions/{session_id}")
+# async def patch_session(session_id: str, req: SessionUpdateRequest):
+#     await run_in_threadpool(update_research_topic, session_id, req.topic)
+#     return {"session_id": session_id, "topic": req.topic}
 
 
-@app.delete("/sessions/{session_id}")
-async def delete_session(session_id: str):
-    await run_in_threadpool(delete_research_session, session_id)
-    return {"deleted": session_id}
+# @app.delete("/sessions/{session_id}")
+# async def delete_session(session_id: str):
+#     await run_in_threadpool(delete_research_session, session_id)
+#     return {"deleted": session_id}
 
 
-@app.get("/notes")
-async def get_notes_endpoint(session_id: str, cpt: str):
-    return {"notes": await run_in_threadpool(get_notes, session_id, cpt)}
+# @app.get("/notes")
+# async def get_notes_endpoint(session_id: str, cpt: str):
+#     return {"notes": await run_in_threadpool(get_notes, session_id, cpt)}
 
 
-@app.put("/notes")
-async def put_notes(req: NotesRequest):
-    await run_in_threadpool(save_notes, req.session_id, req.cpt, req.notes)
-    return {"saved": True}
+# @app.put("/notes")
+# async def put_notes(req: NotesRequest):
+#     await run_in_threadpool(save_notes, req.session_id, req.cpt, req.notes)
+#     return {"saved": True}
 
 
-@app.post("/feedback/accuracy")
-async def post_accuracy_feedback(req: AccuracyFeedbackRequest):
-    await run_in_threadpool(
-        save_accuracy_feedback, req.session_id, req.cpt, req.section_id, req.rating, req.reason
-    )
-    return {"saved": True}
+# @app.post("/feedback/accuracy")
+# async def post_accuracy_feedback(req: AccuracyFeedbackRequest):
+#     await run_in_threadpool(
+#         save_accuracy_feedback, req.session_id, req.cpt, req.section_id, req.rating, req.reason
+#     )
+#     return {"saved": True}
 
 
-@app.get("/feedback/accuracy")
-async def get_accuracy(session_id: str, cpt: str, section_id: str):
-    fb = await run_in_threadpool(get_accuracy_feedback, session_id, cpt, section_id)
-    if not fb:
-        raise HTTPException(404, detail="Feedback not found")
-    return fb
+# @app.get("/feedback/accuracy")
+# async def get_accuracy(session_id: str, cpt: str, section_id: str):
+#     fb = await run_in_threadpool(get_accuracy_feedback, session_id, cpt, section_id)
+#     if not fb:
+#         raise HTTPException(404, detail="Feedback not found")
+#     return fb
 
 
 @app.get("/export/excel")
@@ -253,12 +253,6 @@ async def export_pdf(session_id: str):
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
-
-
-# Optional: NCCI retrieval stub (wire when ready)
-@app.post("/ncci/retrieve")
-async def ncci_retrieve(_: NcciRetrieveRequest):
-    return JSONResponse(status_code=501, content={"detail": "Not implemented yet"})
 
 
 if __name__ == "__main__":

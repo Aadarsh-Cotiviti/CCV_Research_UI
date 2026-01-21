@@ -1,63 +1,13 @@
 import streamlit as st
-from datetime import datetime
-import sqlite3
-import os
+from services.db_access import init_user_feedback_db, save_user_feedback
 
 def init_feedback_db():
     """Initialize feedback database"""
-    db_path = os.path.join(os.path.dirname(__file__), "feedback.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS feedback (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            model_used TEXT,
-            research_type TEXT,
-            topic TEXT,
-            ui_rating INTEGER,
-            content_rating INTEGER,
-            section1_accuracy TEXT,
-            section2_accuracy TEXT,
-            section3_accuracy TEXT,
-            section4_accuracy TEXT,
-            section5_accuracy TEXT,
-            section6_accuracy TEXT,
-            feedback_text TEXT,
-            submitted_at TEXT NOT NULL
-        )
-    """)
-    
-    conn.commit()
-    conn.close()
+    init_user_feedback_db()
 
-def save_feedback(model_used, research_type, topic, ui_rating, content_rating, 
-                  section_ratings, feedback_text):
+def save_feedback(model_used, research_type, topic, ui_rating, content_rating, section_ratings, feedback_text):
     """Save feedback to database"""
-    db_path = os.path.join(os.path.dirname(__file__), "feedback.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    cursor.execute("""
-        INSERT INTO feedback (timestamp, model_used, research_type, topic, ui_rating, 
-                             content_rating, section1_accuracy, section2_accuracy, 
-                             section3_accuracy, section4_accuracy, section5_accuracy, 
-                             section6_accuracy, feedback_text, submitted_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (timestamp, model_used, research_type, topic, ui_rating, content_rating,
-          section_ratings.get('section1', 'Not Rated'),
-          section_ratings.get('section2', 'Not Rated'),
-          section_ratings.get('section3', 'Not Rated'),
-          section_ratings.get('section4', 'Not Rated'),
-          section_ratings.get('section5', 'Not Rated'),
-          section_ratings.get('section6', 'Not Rated'),
-          feedback_text, timestamp))
-    
-    conn.commit()
-    conn.close()
+    save_user_feedback(model_used, research_type, topic, ui_rating, content_rating, section_ratings, feedback_text)
 
 def render_feedback_page():
     """Render the feedback form page"""

@@ -10,67 +10,21 @@ def create_session(session_id, topic, persona="Analysts"):
 import sqlite3
 
 DB_PATH = "interactions2.db"
+from services.db_access import (
+    create_interaction_session,
+    delete_interaction_session,
+    get_interaction_history,
+    get_interaction_sessions,
+    init_interactions_db,
+    rename_interaction_session,
+    save_interaction,
+)
 
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS interactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT,
-            topic TEXT,
-            persona TEXT,
-            question TEXT,
-            response TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
-
+# Legacy exports for existing imports
+init_db = init_interactions_db
+create_session = create_interaction_session
+get_sessions = get_interaction_sessions
+get_session_history = get_interaction_history
+rename_session = rename_interaction_session
+delete_session = delete_interaction_session
 def save_interaction(session_id, topic, persona, question, response):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
-        INSERT INTO interactions (session_id, topic, persona, question, response)
-        VALUES (?, ?, ?, ?, ?)
-    """, (session_id, topic, persona, question, response))
-    conn.commit()
-    conn.close()
-
-def get_sessions():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.execute("""
-        SELECT DISTINCT session_id, topic FROM interactions ORDER BY timestamp DESC LIMIT 50
-    """)
-    sessions = cursor.fetchall()
-    conn.close()
-    return sessions
-
-def get_session_history(session_id):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.execute("""
-        SELECT question, response FROM interactions WHERE session_id = ? ORDER BY timestamp ASC
-    """, (session_id,))
-    rows = cursor.fetchall()
-    conn.close()
-    messages = [{"role": "system", "content": "You are an APC research assistant."}]
-    for q, r in rows:
-        messages.append({"role": "user", "content": q})
-        messages.append({"role": "assistant", "content": r})
-    return messages
-
-def rename_session(session_id, new_topic):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
-        UPDATE interactions SET topic = ? WHERE session_id = ?
-    """, (new_topic, session_id))
-    conn.commit()
-    conn.close()
-
-# Delete all interactions for a session
-def delete_session(session_id):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
-        DELETE FROM interactions WHERE session_id = ?
-    """, (session_id,))
-    conn.commit()
-    conn.close()

@@ -1,17 +1,34 @@
 """
 Service Utilities for APC Research
 
-This module contains all database operations, data processing utilities,
-and helper functions used by service modules.
+This module contains data processing utilities and helpers. All database
+operations now live in db_access to keep persistence logic centralized.
 """
 
-import sqlite3
 import os
 from datetime import datetime, timedelta
 import pandas as pd
 import re
 import boto3
 from io import BytesIO
+from .db_access import (
+    delete_research_session,
+    get_accuracy_feedback,
+    get_all_research_sessions,
+    get_chat_history,
+    get_notes,
+    get_research_session,
+    init_all_databases,
+    init_chat_db,
+    init_accuracy_feedback_db as init_feedback_db,
+    init_notes_db,
+    init_research_sessions_db,
+    save_accuracy_feedback,
+    save_chat_message,
+    save_notes,
+    save_research_session,
+    update_research_topic,
+)
 
 # Database path configuration
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
@@ -112,372 +129,6 @@ def compute_audit_window():
 def get_timestamp():
     """Get current timestamp in standard format"""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-
-# ==================== Database: Notes ====================
-
-def init_notes_db():
-    """Initialize notes database"""
-    db_path = os.path.join(DATA_DIR, "apc_notes.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT,
-            cpt_code TEXT,
-            notes_text TEXT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        )
-    """)
-    
-    conn.commit()
-    conn.close()
-
-
-def save_notes(session_id, cpt_code, notes_text):
-    """Save or update notes for a session/CPT code"""
-    db_path = os.path.join(DATA_DIR, "apc_notes.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    timestamp = get_timestamp()
-    
-    cursor.execute("""
-        SELECT id FROM notes WHERE session_id = ? AND cpt_code = ?
-    """, (session_id, cpt_code))
-    
-    existing = cursor.fetchone()
-    
-    if existing:
-        cursor.execute("""
-            UPDATE notes SET notes_text = ?, updated_at = ?
-            WHERE session_id = ? AND cpt_code = ?
-        """, (notes_text, timestamp, session_id, cpt_code))
-    else:
-        cursor.execute("""
-            INSERT INTO notes (session_id, cpt_code, notes_text, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
-        """, (session_id, cpt_code, notes_text, timestamp, timestamp))
-    
-    conn.commit()
-    conn.close()
-
-
-def get_notes(session_id, cpt_code):
-    """Retrieve notes for a session/CPT code"""
-    db_path = os.path.join(DATA_DIR, "apc_notes.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT notes_text FROM notes WHERE session_id = ? AND cpt_code = ?
-    """, (session_id, cpt_code))
-    
-    result = cursor.fetchone()
-    conn.close()
-    
-    return result[0] if result else ""
-
-
-# ==================== Database: Chat History ====================
-
-def init_chat_db():
-    """Initialize chat database for section-specific conversations"""
-    db_path = os.path.join(DATA_DIR, "apc_chat.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS chat_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT NOT NULL,
-            cpt_code TEXT NOT NULL,
-            section_id TEXT NOT NULL,
-            user_message TEXT NOT NULL,
-            ai_response TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        )
-    """)
-    
-    conn.commit()
-    conn.close()
-
-
-def save_chat_message(session_id, cpt_code, section_id, user_message, ai_response):
-    """Save a chat message exchange"""
-    db_path = os.path.join(DATA_DIR, "apc_chat.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    timestamp = get_timestamp()
-    
-    cursor.execute("""
-        INSERT INTO chat_history (session_id, cpt_code, section_id, user_message, ai_response, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (session_id, cpt_code, section_id, user_message, ai_response, timestamp))
-    
-    conn.commit()
-    conn.close()
-
-
-def get_chat_history(session_id, cpt_code, section_id):
-    """Retrieve chat history for a specific section"""
-    db_path = os.path.join(DATA_DIR, "apc_chat.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT user_message, ai_response, created_at 
-        FROM chat_history 
-        WHERE session_id = ? AND cpt_code = ? AND section_id = ?
-        ORDER BY created_at ASC
-    """, (session_id, cpt_code, section_id))
-    
-    results = cursor.fetchall()
-    conn.close()
-    
-    return [{"user": r[0], "ai": r[1], "timestamp": r[2]} for r in results]
-
-
-# ==================== Database: Research Sessions ====================
-
-def init_research_sessions_db():
-    """Initialize research sessions database"""
-    db_path = os.path.join(DATA_DIR, "apc_research_sessions.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS research_sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT UNIQUE NOT NULL,
-            topic TEXT NOT NULL,
-            cpt_code TEXT NOT NULL,
-            model_used TEXT NOT NULL,
-            analysis_result TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        )
-    """)
-    
-    conn.commit()
-    conn.close()
-
-
-def save_research_session(session_id, topic, cpt_code, model_used, analysis_result):
-    """Save or update a research session"""
-    db_path = os.path.join(DATA_DIR, "apc_research_sessions.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    timestamp = get_timestamp()
-    
-    cursor.execute("""
-        SELECT id FROM research_sessions WHERE session_id = ?
-    """, (session_id,))
-    
-    existing = cursor.fetchone()
-    
-    if existing:
-        cursor.execute("""
-            UPDATE research_sessions 
-            SET topic = ?, cpt_code = ?, model_used = ?, analysis_result = ?, updated_at = ?
-            WHERE session_id = ?
-        """, (topic, cpt_code, model_used, analysis_result, timestamp, session_id))
-    else:
-        cursor.execute("""
-            INSERT INTO research_sessions 
-            (session_id, topic, cpt_code, model_used, analysis_result, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (session_id, topic, cpt_code, model_used, analysis_result, timestamp, timestamp))
-    
-    conn.commit()
-    conn.close()
-
-
-def get_all_research_sessions():
-    """Get all research sessions ordered by most recent first"""
-    db_path = os.path.join(DATA_DIR, "apc_research_sessions.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT session_id, topic, cpt_code, created_at, updated_at
-        FROM research_sessions
-        ORDER BY updated_at DESC
-    """)
-    
-    sessions = cursor.fetchall()
-    conn.close()
-    
-    return sessions
-
-
-def get_research_session(session_id):
-    """Get a specific research session"""
-    db_path = os.path.join(DATA_DIR, "apc_research_sessions.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT session_id, topic, cpt_code, model_used, analysis_result, created_at, updated_at
-        FROM research_sessions
-        WHERE session_id = ?
-    """, (session_id,))
-    
-    session = cursor.fetchone()
-    conn.close()
-    
-    if session:
-        return {
-            "session_id": session[0],
-            "topic": session[1],
-            "cpt_code": session[2],
-            "model": session[3],
-            "result": session[4],
-            "created_at": session[5],
-            "updated_at": session[6]
-        }
-    return None
-
-
-def delete_research_session(session_id):
-    """Delete a research session and all associated data"""
-    # Delete from research sessions
-    db_path = os.path.join(DATA_DIR, "apc_research_sessions.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM research_sessions WHERE session_id = ?", (session_id,))
-    conn.commit()
-    conn.close()
-    
-    # Delete associated chat history
-    db_path = os.path.join(DATA_DIR, "apc_chat.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM chat_history WHERE session_id = ?", (session_id,))
-    conn.commit()
-    conn.close()
-    
-    # Delete associated notes
-    db_path = os.path.join(DATA_DIR, "apc_notes.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM notes WHERE session_id = ?", (session_id,))
-    conn.commit()
-    conn.close()
-    
-    # Delete associated feedback
-    db_path = os.path.join(DATA_DIR, "apc_feedback.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM accuracy_feedback WHERE session_id = ?", (session_id,))
-    conn.commit()
-    conn.close()
-
-
-def update_research_topic(session_id, new_topic):
-    """Update the topic name for a research session"""
-    db_path = os.path.join(DATA_DIR, "apc_research_sessions.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    timestamp = get_timestamp()
-    
-    cursor.execute("""
-        UPDATE research_sessions 
-        SET topic = ?, updated_at = ?
-        WHERE session_id = ?
-    """, (new_topic, timestamp, session_id))
-    
-    conn.commit()
-    conn.close()
-
-
-# ==================== Database: Accuracy Feedback ====================
-
-def init_feedback_db():
-    """Initialize feedback database for accuracy ratings"""
-    db_path = os.path.join(DATA_DIR, "apc_feedback.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS accuracy_feedback (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT NOT NULL,
-            cpt_code TEXT NOT NULL,
-            section_id TEXT NOT NULL,
-            rating TEXT NOT NULL,
-            reason TEXT,
-            created_at TEXT NOT NULL
-        )
-    """)
-    
-    conn.commit()
-    conn.close()
-
-
-def save_accuracy_feedback(session_id, cpt_code, section_id, rating, reason=None):
-    """Save accuracy feedback for a section"""
-    db_path = os.path.join(DATA_DIR, "apc_feedback.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    timestamp = get_timestamp()
-    
-    cursor.execute("""
-        SELECT id FROM accuracy_feedback 
-        WHERE session_id = ? AND cpt_code = ? AND section_id = ?
-    """, (session_id, cpt_code, section_id))
-    
-    existing = cursor.fetchone()
-    
-    if existing:
-        cursor.execute("""
-            UPDATE accuracy_feedback 
-            SET rating = ?, reason = ?, created_at = ?
-            WHERE session_id = ? AND cpt_code = ? AND section_id = ?
-        """, (rating, reason, timestamp, session_id, cpt_code, section_id))
-    else:
-        cursor.execute("""
-            INSERT INTO accuracy_feedback 
-            (session_id, cpt_code, section_id, rating, reason, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (session_id, cpt_code, section_id, rating, reason, timestamp))
-    
-    conn.commit()
-    conn.close()
-
-
-def get_accuracy_feedback(session_id, cpt_code, section_id):
-    """Retrieve accuracy feedback for a section"""
-    db_path = os.path.join(DATA_DIR, "apc_feedback.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT rating, reason FROM accuracy_feedback 
-        WHERE session_id = ? AND cpt_code = ? AND section_id = ?
-    """, (session_id, cpt_code, section_id))
-    
-    result = cursor.fetchone()
-    conn.close()
-    
-    return {"rating": result[0], "reason": result[1]} if result else None
-
-
-# ==================== Database Initialization ====================
-
-def init_all_databases():
-    """Initialize all APC research databases"""
-    init_notes_db()
-    init_chat_db()
-    init_research_sessions_db()
-    init_feedback_db()
 
 
 # ==================== AWS S3 Parquet Files Loading ====================
