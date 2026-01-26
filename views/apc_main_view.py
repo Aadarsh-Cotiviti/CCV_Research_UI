@@ -233,7 +233,7 @@ def render_step1():
     # Input fields
     topic_input = st.text_input(
         "Medical Procedure or Condition Topic",
-        placeholder="e.g., Bronchial Biopsy, Knee Replacement, Cardiac Catheterization",
+        placeholder="e.g., Bronchial Biopsy, Ankle Arthroplasty, Knee Replacement, Cardiac Catheterization",
         help="Enter a medical procedure or condition to find relevant CPT codes",
         key="topic_input_field"
     )

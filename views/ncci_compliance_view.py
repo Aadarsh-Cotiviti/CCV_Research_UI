@@ -282,7 +282,7 @@ def render_section(cpt_code, model, session_id, idx=0):
     
     # Handle Re-generate button
     if regenerate_btn:
-        with st.spinner("Running fresh analysis..."):
+        with st.spinner("Running analysis... (First-time processing may take up to 5 minutes to build indices)"):
             fresh_data = analyze_ncci_compliance(cpt_code, model=model, use_cache=False)
             st.session_state[section_key] = fresh_data
             st.success("✅ Analysis completed and saved!")
