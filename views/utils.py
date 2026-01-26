@@ -17,13 +17,14 @@ def get_source_color(source: str) -> str:
     Get color code based on data source
     
     Args:
-        source: Data source identifier ('internal_kb', 'llm', etc.)
+        source: Data source identifier ('internal_kb', 'local_kb', 'llm', etc.)
         
     Returns:
         Hex color code string
     """
     source_colors = {
         'internal_kb': '#2d7a4f',  # Green for internal knowledge base
+        'local_kb': '#2d7a4f',     # Green for local knowledge base (same as internal_kb)
         'llm': '#1f1f1f',           # Black for LLM generated content
         'external': '#4a90e2',      # Blue for external sources (if needed)
         'hybrid': '#8b6914'         # Gold for hybrid sources (if needed)
@@ -47,15 +48,23 @@ def format_text_with_source(text: str, source: str, bold: bool = False) -> str:
     font_weight = 'bold' if bold else 'normal'
     # Use style tag to define a unique class with high specificity
     unique_id = f"src-{hash(text) % 10000}"
+    
+    # Escape HTML special characters but preserve line breaks
+    import html
+    escaped_text = html.escape(text)
+    # Convert newlines to <br> tags for proper display
+    escaped_text = escaped_text.replace('\n', '<br>')
+    
     return f"""
     <style>
         #{unique_id}.source-colored-text {{
             color: {color} !important;
             font-weight: {font_weight};
-            display: inline;
+            display: inline-block;
+            white-space: pre-wrap;
         }}
     </style>
-    <span id="{unique_id}" class="source-colored-text">{text}</span>
+    <span id="{unique_id}" class="source-colored-text">{escaped_text}</span>
     """
 
 

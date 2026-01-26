@@ -7,48 +7,66 @@ This module renders the UI for Section 3 - Payment Rate Comparison
 import streamlit as st
 import pandas as pd
 from services.payment_rate_service import analyze_payment_rate_comparison, load_cached_results
-from .utils import render_accuracy_feedback, render_chat_interface, render_source_legend
+from .utils import render_accuracy_feedback, render_chat_interface, render_source_legend, format_text_with_source
 
 
-def render_payment_table(payment_history_dict):
-    """
-    Render payment history table as interactive dataframe
-    
-    Args:
-        payment_history_dict: Dict with payment data and metadata
-    """
-    if not payment_history_dict or "data" not in payment_history_dict:
-        st.warning("No payment history data available")
+def render_cpt_code_reference(cpt_descriptions):
+    """Render CPT Code Reference with all codes from payment tables"""
+    if not cpt_descriptions or len(cpt_descriptions) == 0:
         return
     
-    # Convert to DataFrame
-    df = pd.DataFrame(payment_history_dict["data"])
+    st.markdown("---")
+    st.markdown("## 📖 CPT Codes Referenced")
     
+    # Display codes with descriptions using format_text_with_source for proper color coding
+    for cpt_code, desc_info in sorted(cpt_descriptions.items()):
+        description = desc_info.get('description', 'N/A')
+        source = desc_info.get('source', 'llm')
+        
+        # Format the entire line with source coloring
+        formatted_line = f"**{cpt_code}**: {description}"
+        colored_text = format_text_with_source(formatted_line, source)
+        st.markdown(f"- {colored_text}", unsafe_allow_html=True)
+
+
+def render_payment_table_apc(payment_data):
+    """Render APC payment history table"""
+    if not payment_data or payment_data.get("data_filtered") is None:
+        st.warning("No APC payment history data available")
+        return
+    
+    df = pd.DataFrame(payment_data["data_filtered"])
     if df.empty:
-        st.warning("No payment records found")
+        st.warning("No APC payment records found")
         return
     
-    # Rename old column name for backward compatibility
+    # Clean APC Code column
     if 'APC' in df.columns and 'APC Code' not in df.columns:
         df.rename(columns={'APC': 'APC Code'}, inplace=True)
-    
-    # Clean APC Code column - remove decimals (e.g., "5072.0" -> "5072")
     if 'APC Code' in df.columns:
         df['APC Code'] = pd.to_numeric(df['APC Code'], errors='coerce').fillna(0).astype(int).astype(str)
     
-    # Select and reorder columns, excluding Month, Addendum and Period
+    # Display columns
     display_columns = ['HCPCS Code', 'Year', 'SI', 'APC Code', 'Payment Rate']
     df_display = df[display_columns].copy()
     
-    st.markdown(f"### 📊 Payment History Table")
+    # Get exclusions info
+    exclusions = payment_data.get("exclusions", {})
+    excluded_count = len(exclusions)
+    filtered_count = payment_data.get("record_count_filtered", len(df))
     
-    # Apply green styling to the entire dataframe
+    # Display table
+    if excluded_count > 0:
+        st.markdown(f"### 📊 APC Payment History Table (Excluded codes removed)")
+        st.info(f"ℹ️ Showing {filtered_count} records. {excluded_count} code(s) excluded from APC payment (see below).")
+    else:
+        st.markdown(f"### 📊 APC Payment History Table")
+    
     def style_green(val):
         return 'color: #2e7d32'
     
     styled_df = df_display.style.applymap(style_green)
     
-    # Display styled table
     st.dataframe(
         styled_df,
         use_container_width=True,
@@ -62,8 +80,248 @@ def render_payment_table(payment_history_dict):
         }
     )
     
-    # Add note about data source
-    st.caption("📅 Payment data represents January rates for each year (2023, 2024, 2025) for all CPT codes analyzed.")
+    st.caption("📅 Payment data represents January rates for each year (2024-2026)")
+    
+    # Display exclusions
+    if exclusions and excluded_count > 0:
+        st.markdown("#### ⚠️ CMS APC Excluded Codes")
+        st.warning(f"**{excluded_count} code(s) excluded** - Not eligible for APC payment")
+        
+        exclusions_data = []
+        for cpt, info in exclusions.items():
+            exclusions_data.append({
+                "CPT Code": cpt,
+                "Status Indicator": info['status_indicator']
+            })
+        
+        exclusions_df = pd.DataFrame(exclusions_data).sort_values('CPT Code')
+        
+        def style_red(val):
+            return 'color: #d32f2f; font-weight: bold'
+        
+        styled_exclusions = exclusions_df.style.applymap(style_red, subset=['CPT Code', 'Status Indicator'])
+        
+        st.dataframe(
+            styled_exclusions,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "CPT Code": st.column_config.TextColumn("CPT Code", width="small"),
+                "Status Indicator": st.column_config.TextColumn("SI", width="small")
+            }
+        )
+
+
+def render_payment_table_asc(payment_data):
+    """Render ASC payment history table"""
+    if not payment_data or payment_data.get("data_filtered") is None:
+        st.warning("No ASC payment history data available")
+        return
+    
+    df = pd.DataFrame(payment_data["data_filtered"])
+    if df.empty:
+        st.warning("No ASC payment records found")
+        return
+    
+    # Check available columns
+    available_cols = df.columns.tolist()
+    
+    # Build display columns based on what's available
+    display_columns = []
+    if 'HCPCS Code' in available_cols:
+        display_columns.append('HCPCS Code')
+    if 'Year' in available_cols:
+        display_columns.append('Year')
+    if 'Payment Indicator' in available_cols:
+        display_columns.append('Payment Indicator')
+    if 'Payment Rate' in available_cols:
+        display_columns.append('Payment Rate')
+    
+    if not display_columns:
+        st.error(f"Required columns not found. Available columns: {available_cols}")
+        return
+    
+    df_display = df[display_columns].copy()
+    
+    # Get exclusions info
+    exclusions = payment_data.get("exclusions", {})
+    excluded_count = len(exclusions)
+    filtered_count = payment_data.get("record_count_filtered", len(df))
+    
+    # Display table
+    if excluded_count > 0:
+        st.markdown(f"### 📊 ASC Payment History Table (Excluded codes removed)")
+        st.info(f"ℹ️ Showing {filtered_count} records. {excluded_count} code(s) excluded from ASC payment (see below).")
+    else:
+        st.markdown(f"### 📊 ASC Payment History Table")
+    
+    def style_green(val):
+        return 'color: #2e7d32'
+    
+    styled_df = df_display.style.applymap(style_green)
+    
+    # Build column config dynamically
+    column_config = {}
+    if 'HCPCS Code' in display_columns:
+        column_config['HCPCS Code'] = st.column_config.TextColumn("CPT Code", width="small")
+    if 'Year' in display_columns:
+        column_config['Year'] = st.column_config.TextColumn("Year", width="small")
+    if 'Payment Indicator' in display_columns:
+        column_config['Payment Indicator'] = st.column_config.TextColumn("Payment Indicator", width="small")
+    if 'Payment Rate' in display_columns:
+        column_config['Payment Rate'] = st.column_config.NumberColumn("Payment Rate", format="$%.2f")
+    
+    st.dataframe(
+        styled_df,
+        use_container_width=True,
+        hide_index=True,
+        column_config=column_config
+    )
+    
+    st.caption("📅 Payment data represents January rates for each year (2024-2026)")
+    
+    # Display exclusions
+    if exclusions and excluded_count > 0:
+        st.markdown("#### ⚠️ CMS ASC Excluded Codes")
+        st.warning(f"**{excluded_count} code(s) excluded** - Not eligible for ASC payment")
+        
+        exclusions_data = []
+        for cpt, info in exclusions.items():
+            exclusions_data.append({
+                "CPT Code": cpt,
+                "Payment Indicator": info['status_indicator']
+            })
+        
+        exclusions_df = pd.DataFrame(exclusions_data).sort_values('CPT Code')
+        
+        def style_red(val):
+            return 'color: #d32f2f; font-weight: bold'
+        
+        styled_exclusions = exclusions_df.style.applymap(style_red, subset=['CPT Code', 'Payment Indicator'])
+        
+        st.dataframe(
+            styled_exclusions,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "CPT Code": st.column_config.TextColumn("CPT Code", width="small"),
+                "Payment Indicator": st.column_config.TextColumn("Payment Indicator", width="small")
+            }
+        )
+
+
+def render_payment_table_pnpp(payment_data):
+    """Render PNPP payment history table"""
+    if not payment_data or payment_data.get("data_filtered") is None:
+        st.warning("No PNPP payment history data available")
+        return
+    
+    df = pd.DataFrame(payment_data["data_filtered"])
+    if df.empty:
+        st.warning("No PNPP payment records found")
+        return
+    
+    # Check which columns are available and handle different column names
+    available_cols = df.columns.tolist()
+    
+    # Build display columns based on what's available
+    display_columns = []
+    col_mapping = {}
+    
+    # HCPCS column (could be 'HCPCS' or 'HCPCS Code')
+    if 'HCPCS' in available_cols:
+        display_columns.append('HCPCS')
+        col_mapping['CPT Code'] = 'HCPCS'
+    elif 'HCPCS Code' in available_cols:
+        display_columns.append('HCPCS Code')
+        col_mapping['CPT Code'] = 'HCPCS Code'
+    
+    # Add other required columns if they exist
+    if 'Year' in available_cols:
+        display_columns.append('Year')
+    if 'STATUS CODE' in available_cols:
+        display_columns.append('STATUS CODE')
+    if 'Non-Facility Payment Rate' in available_cols:
+        display_columns.append('Non-Facility Payment Rate')
+    if 'Facility Payment Rate' in available_cols:
+        display_columns.append('Facility Payment Rate')
+    
+    if not display_columns:
+        st.error(f"Required columns not found. Available columns: {available_cols}")
+        return
+    
+    df_display = df[display_columns].copy()
+    
+    # Get exclusions info
+    exclusions = payment_data.get("exclusions", {})
+    excluded_count = len(exclusions)
+    filtered_count = payment_data.get("record_count_filtered", len(df))
+    
+    # Display table
+    if excluded_count > 0:
+        st.markdown(f"### 📊 PNPP Payment History Table (Excluded codes removed)")
+        st.info(f"ℹ️ Showing {filtered_count} records. {excluded_count} code(s) excluded from PNPP payment (see below).")
+    else:
+        st.markdown(f"### 📊 PNPP Payment History Table")
+    
+    def style_green(val):
+        return 'color: #2e7d32'
+    
+    styled_df = df_display.style.applymap(style_green)
+    
+    # Build column config dynamically
+    column_config = {}
+    if 'HCPCS' in display_columns:
+        column_config['HCPCS'] = st.column_config.TextColumn("CPT Code", width="small")
+    elif 'HCPCS Code' in display_columns:
+        column_config['HCPCS Code'] = st.column_config.TextColumn("CPT Code", width="small")
+    
+    if 'Year' in display_columns:
+        column_config['Year'] = st.column_config.TextColumn("Year", width="small")
+    if 'STATUS CODE' in display_columns:
+        column_config['STATUS CODE'] = st.column_config.TextColumn("Status Code", width="small")
+    if 'Non-Facility Payment Rate' in display_columns:
+        column_config['Non-Facility Payment Rate'] = st.column_config.NumberColumn("Non-Facility Rate", format="$%.2f")
+    if 'Facility Payment Rate' in display_columns:
+        column_config['Facility Payment Rate'] = st.column_config.NumberColumn("Facility Rate", format="$%.2f")
+    
+    st.dataframe(
+        styled_df,
+        use_container_width=True,
+        hide_index=True,
+        column_config=column_config
+    )
+    
+    st.caption("📅 Payment data represents January rates for each year (2024-2026)")
+    
+    # Display exclusions
+    if exclusions and excluded_count > 0:
+        st.markdown("#### ⚠️ CMS PNPP Excluded Codes")
+        st.warning(f"**{excluded_count} code(s) excluded** - Not eligible for PNPP payment")
+        
+        exclusions_data = []
+        for cpt, info in exclusions.items():
+            exclusions_data.append({
+                "CPT Code": cpt,
+                "Status Code": info['status_indicator']
+            })
+        
+        exclusions_df = pd.DataFrame(exclusions_data).sort_values('CPT Code')
+        
+        def style_red(val):
+            return 'color: #d32f2f; font-weight: bold'
+        
+        styled_exclusions = exclusions_df.style.applymap(style_red, subset=['CPT Code', 'Status Code'])
+        
+        st.dataframe(
+            styled_exclusions,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "CPT Code": st.column_config.TextColumn("CPT Code", width="small"),
+                "Status Code": st.column_config.TextColumn("Status Code", width="small")
+            }
+        )
 
 
 def render_section(cpt_code, model, session_id, idx=0):
@@ -130,8 +388,28 @@ def render_section(cpt_code, model, session_id, idx=0):
         if neighboring_codes:
             st.info(f"📋 **Analyzing {len(cpt_codes_analyzed)} CPT codes**: Target code **{cpt_code}** + {len(neighboring_codes)} neighboring codes ({', '.join(neighboring_codes)})")
         
-        # Display payment history table
-        render_payment_table(payment_history)
+        # Display all three payment history tables
+        st.markdown("---")
+        st.markdown("## Payment History Tables")
+        
+        # APC Table
+        if "apc" in payment_history:
+            render_payment_table_apc(payment_history["apc"])
+            st.markdown("---")
+        
+        # ASC Table  
+        if "asc" in payment_history:
+            render_payment_table_asc(payment_history["asc"])
+            st.markdown("---")
+        
+        # PNPP Table
+        if "pnpp" in payment_history:
+            render_payment_table_pnpp(payment_history["pnpp"])
+        
+        # Display CPT Code Reference
+        cpt_descriptions = display_data.get("cpt_descriptions", {})
+        if cpt_descriptions:
+            render_cpt_code_reference(cpt_descriptions)
         
         st.markdown("---")
         
