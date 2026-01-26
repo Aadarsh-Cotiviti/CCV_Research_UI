@@ -16,7 +16,7 @@ from .utils import compute_audit_window
 from services.common.device_utils import get_or_generate_device_description
 
 
-def retrieve_knowledge(hcpcs_code, device_change_df=Path('output/preprocessed_device_code_change_tracking.csv')):
+def retrieve_knowledge(hcpcs_code, device_change_df=Path('data/preprocessed_device_code_change_tracking.csv')):
     """
     Retrieve HCPCS device code changes (new or changed codes) from local knowledge base.
     
@@ -361,104 +361,25 @@ def analyze_device_code_analysis(target_cpt, device_codes=None, model="gpt-4.1-m
                 print(f"❌ Not in KB: {code}")
         
         print(f"\n📊 Knowledge base results: {len(kb_results)} codes found")
-        print(f"📊 Codes requiring LLM analysis: {len(codes_without_kb)}")
+        print(f"📊 Codes without changes since 2024: {len(codes_without_kb)}")
         
-        # Step 4: Analysis for codes not in the change tracking KB
-        # 4.1: Codes have local code-desc mapping, but no change tracking info
-        internal_llm_recoding_results = []
-        local_desc_results = []
-        local_desc_full_info = {}  # Store full desc info including source
-        codes_for_llm = []
-        
-        for code in codes_without_kb:
-            # Only use local description (no LLM fallback) for internal_llm_recoding
-            desc = get_or_generate_device_description(code, model=model, use_llm_fallback=False)
-            if desc and desc["description"]:  # Check if local description exists
-                # Store simple format for LLM prompt
-                local_desc_results.append({
+        # Step 4: For codes not in the change tracking KB, return standardized message
+        no_change_results = []
+        if codes_without_kb:
+            no_change_message = "No changes to device code descriptions since 2024."
+            for code in codes_without_kb:
+                desc = get_or_generate_device_description(code, model=model, use_llm_fallback=False)
+                no_change_results.append({
                     "hcpcs_code": code,
-                    "description": desc["description"]
+                    "description": desc["description"] if desc and desc["description"] else "Description not available",
+                    "description_source": desc["source"] if desc else "unknown",
+                    "status": no_change_message
                 })
-                # Store full info including source for later use
-                local_desc_full_info[code] = desc
-                print(f"[Local Description] HCPCS Code: {code} - {desc['description'][:80]}... [source: {desc['source']}]")
-            else:
-                # No local description, needs full LLM analysis
-                codes_for_llm.append(code)
-                print(f"[No Local Description] HCPCS Code: {code} - will use full LLM analysis")
+                print(f"  {code}: {no_change_message}")
         
-        # Use LLM to complete potential recoding possibilities only
-        if local_desc_results:
-            llm_prompt_local = build_llm_completion_prompt_for_local_desc(local_desc_results)
-            messages = [
-                {"role": "system", "content": "You are an expert medical coding analyst specializing in device code analysis."},
-                {"role": "user", "content": llm_prompt_local}
-            ]
-            local_llm_result = query_llm(messages, model=model)
-            print(local_llm_result)
-            
-            # Parse LLM JSON response
-            class RecodingItem(BaseModel):
-                hcpcs_code: str
-                recoding_possibilities: str
-            
-            try:
-                recoding_items = TypeAdapter(list[RecodingItem]).validate_python(json.loads(local_llm_result))
-                for item in recoding_items:
-                    # Get full desc info including source
-                    full_desc = local_desc_full_info.get(item.hcpcs_code)
-                    if full_desc:
-                        internal_llm_recoding_results.append({
-                            "hcpcs_code": item.hcpcs_code,
-                            "description": full_desc["description"],
-                            "description_source": full_desc["source"],  # Store source separately
-                            "llm_recoding": {
-                                "recoding_possibilities": item.recoding_possibilities,
-                                "source": "llm"
-                            }
-                        })
-                print(f"✅ Parsed {len(internal_llm_recoding_results)} internal LLM recoding results")
-            except (ValidationError, json.JSONDecodeError) as e:
-                print(f"⚠️ [Internal LLM JSON parse error]: {e}")
-        
-        # 4.2: Codes have no local description and no change tracking info, need full LLM analysis
+        # Kept for backwards compatibility (empty lists)
+        internal_llm_recoding_results = []
         external_full_llm_result = []
-        if codes_for_llm:
-            print(f"\n===== LLM Analysis for Codes Not in KB and No Local Description =====\nCodes for LLM: {codes_for_llm}")
-            llm_prompt = build_llm_analysis_prompt(codes_for_llm)
-            if not llm_prompt:
-                print("[LLM prompt is None, skipping LLM query for codes with no local desc]")
-            else:
-                print(f"[LLM Prompt for external_full_llm_result]:\n{llm_prompt}")
-                messages = [
-                    {"role": "system", "content": "You are an expert medical coding analyst specializing in device code analysis."},
-                    {"role": "user", "content": llm_prompt}
-                ]
-                llm_result = query_llm(messages, model=model)
-                print(f"[LLM external_full_llm_result]:\n{llm_result}")
-                
-                # Parse LLM JSON response with pydantic
-                class ExternalAnalysisItem(BaseModel):
-                    hcpcs_code: str
-                    description: str
-                    recoding_possibilities: str
-                
-                try:
-                    external_items = TypeAdapter(list[ExternalAnalysisItem]).validate_python(json.loads(llm_result))
-                    for item in external_items:
-                        external_full_llm_result.append({
-                            "hcpcs_code": item.hcpcs_code,
-                            "description": item.description,
-                            "llm_recoding": {
-                                "recoding_possibilities": item.recoding_possibilities,
-                                "source": "llm"
-                            }
-                        })
-                    print(f"✅ Parsed {len(external_full_llm_result)} external LLM results")
-                except (ValidationError, json.JSONDecodeError) as e:
-                    print(f"⚠️ [External LLM JSON parse error]: {e}")
-                    # Fallback: store raw result
-                    external_full_llm_result = [{"raw_result": llm_result, "parse_error": str(e)}]
         
         # Save findings to JSON file
         output_dir = f"output/services_findings/{target_cpt}"
@@ -472,8 +393,7 @@ def analyze_device_code_analysis(target_cpt, device_codes=None, model="gpt-4.1-m
             "target_cpt": target_cpt,
             "device_codes_with_desc": device_codes_with_desc,
             "internal_recoding_result": kb_results,
-            "internal_llm_recoding_result": internal_llm_recoding_results,
-            "external_full_llm_result": external_full_llm_result
+            "no_change_results": no_change_results
         }
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(result_obj, f, ensure_ascii=False, indent=2)
@@ -482,8 +402,7 @@ def analyze_device_code_analysis(target_cpt, device_codes=None, model="gpt-4.1-m
         return {
             "device_codes_with_desc": device_codes_with_desc,
             "internal_recoding_result": kb_results,
-            "internal_llm_recoding_result": internal_llm_recoding_results,
-            "external_full_llm_result": external_full_llm_result
+            "no_change_results": no_change_results
         }
         
     except Exception as e:
