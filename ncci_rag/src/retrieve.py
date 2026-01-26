@@ -12,6 +12,9 @@ import argparse
 import json
 import os
 import sqlite3
+import subprocess
+import sys
+from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
 from openai import AzureOpenAI
@@ -87,14 +90,129 @@ def rrf_fuse(*ranked_lists: List[dict], k: int = 60) -> Dict[str, float]:
     return scores
 
 
-def multi_stage_hybrid_rag(target_cpt_code: int = None, top_k: int = 15):
+def check_and_build_indices(base_dir: str = "", auto_build: bool = False) -> bool:
+    """
+    Check if all required index files exist. If not, optionally trigger build.
+    
+    Args:
+        base_dir: Base directory prefix ("ncci_rag/" or "")
+        auto_build: If True, automatically build missing indices without prompting
+        
+    Returns:
+        True if all indices exist or were successfully built, False otherwise
+    """
+    required_files = {
+        "pages.jsonl": f"{base_dir}build/pages.jsonl",
+        "chunks.jsonl": f"{base_dir}build/chunks.jsonl",
+        "table_of_contents.json": f"{base_dir}build/table_of_contents.json",
+        "cpt_range_index.db": f"{base_dir}build/cpt_range_index.db",
+        "bm25_index.pkl": f"{base_dir}build/bm25_index.pkl",
+        "chroma_db": f"{base_dir}build/chroma_db"
+    }
+    
+    missing_files = []
+    for name, path in required_files.items():
+        if not os.path.exists(path):
+            missing_files.append(name)
+    
+    if not missing_files:
+        return True
+    
+    # Found missing files - print info
+    print("\n" + "="*70)
+    print("⚠️  NCCI RAG Index Files Missing")
+    print("="*70)
+    print("\nMissing index files:")
+    for name in missing_files:
+        print(f"  ❌ {name}")
+    
+    print("\nThese files need to be generated through build process.")
+    print("Build process will:")
+    print("  1. Extract and chunk PDF text")
+    print("  2. Build BM25 lexical index")
+    print("  3. Build ChromaDB semantic vector index")
+    print("  4. Create CPT code range index")
+    print("\n⏱️  Estimated time: 10-15 minutes")
+    print("💰 Note: Vector embedding requires Azure OpenAI API calls\n")
+    
+    # Directly build if auto_build is True, otherwise return False
+    if not auto_build:
+        print("❌ Index files missing and auto-build not enabled")
+        print("\n💡 Solutions:")
+        print(f"   1. Run build manually: python3 {base_dir}src/build_all.py")
+        print("   2. Or set auto_build=True when calling\n")
+        return False
+    
+    # Run build process
+    print("\n" + "="*70)
+    print("🚀 Starting NCCI RAG index build...")
+    print("="*70 + "\n")
+    
+    try:
+        # Determine build script path
+        build_script = Path(__file__).parent / "build_all.py"
+        
+        if not build_script.exists():
+            print(f"❌ Build script not found: {build_script}")
+            print("\n💡 Please run build manually:")
+            print(f"   python3 {base_dir}src/build_all.py\n")
+            return False
+        
+        # Run build script
+        result = subprocess.run(
+            [sys.executable, str(build_script)],
+            check=True,
+            capture_output=False,  # Show output in real-time
+            text=True
+        )
+        
+        # Verify all files were created
+        still_missing = []
+        for name, path in required_files.items():
+            if not os.path.exists(path):
+                still_missing.append(name)
+        
+        if still_missing:
+            print("\n⚠️  Build completed but files still missing:")
+            for name in still_missing:
+                print(f"  ❌ {name}")
+            return False
+        
+        print("\n" + "="*70)
+        print("✅ All index files built successfully!")
+        print("="*70 + "\n")
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        print(f"\n❌ Build process failed: {e}")
+        print("\n💡 Please check error logs and run manually:")
+        print(f"   python3 {base_dir}src/build_all.py\n")
+        return False
+    except Exception as e:
+        print(f"\n❌ Build process encountered error: {e}")
+        return False
+
+
+def multi_stage_hybrid_rag(target_cpt_code: int = None, top_k: int = 15, auto_build: bool = False):
     """Multi-stage hybrid RAG retrieval
     
     Args:
         target_cpt_code: Target CPT code
-        top_k: Number of top-k results to return (default: 10)
+        top_k: Number of top-k results to return (default: 15)
+        auto_build: If True, automatically build indices if missing (default: False, will prompt)
     """
-    base_dir = "ncci_rag/" if os.path.exists("ncci_rag/build") else ""
+    # Determine base directory
+    base_dir = "ncci_rag/" if os.path.exists("ncci_rag/data") else ""
+    
+    # Check if indices exist, build if necessary
+    if not check_and_build_indices(base_dir, auto_build):
+        print("\n❌ Cannot continue retrieval: Index files missing and not built")
+        print("\n💡 Solutions:")
+        print("   1. Run build manually: python3 ncci_rag/src/build_all.py")
+        print("   2. Or set auto_build=True parameter when calling\n")
+        return None
+    
+    # Now we can safely load the index files
     ncci_chunks_path = f"{base_dir}build/chunks.jsonl"
     cpt_range_index_path = f"{base_dir}build/cpt_range_index.db"
     bm25_index_path = f"{base_dir}build/bm25_index.pkl"

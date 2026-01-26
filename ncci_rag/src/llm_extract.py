@@ -4,7 +4,7 @@ NCCI RAG: LLM Analysis with Citations
 Pipeline:
 1. Load retrieved chunks from 06_retrieve.py
 2. Format chunks as markdown with citation numbers [1] [2] [3]
-3. Call LLM for NCCI compliance analysis
+3. Call LLM for NCCI compliance analysis with structured output (Pydantic)
 4. Return markdown report with citations
 """
 import argparse
@@ -13,6 +13,7 @@ import os
 import sys
 from typing import Dict, List, Tuple, Optional
 from pathlib import Path
+from pydantic import BaseModel, Field
 
 # Import llm_wrapper from parent directory
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -30,6 +31,25 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# ============================================================================
+# Pydantic Models for Structured Output
+# ============================================================================
+
+class NCCIAnalysis(BaseModel):
+    """Structured NCCI compliance analysis output"""
+    modifier_rules: List[str] = Field(
+        description="List of modifier rules, each as a complete sentence with citation(s) at the end"
+    )
+    ptp_edit_rules: List[str] = Field(
+        description="List of PTP edit rules, each as a complete sentence with citation(s) at the end"
+    )
+    compliance_risks: List[str] = Field(
+        description="List of misuse opportunities and compliance risks, each as a complete sentence with citation(s) at the end"
+    )
+    clinical_context: List[str] = Field(
+        description="List of clinical context and special rules, each as a complete sentence with citation(s) at the end"
+    )
 
 # ============================================================================
 # Configuration
@@ -141,7 +161,12 @@ def create_analysis_prompt(cpt_code: int, chunks_markdown: str, num_chunks: int)
 
 Analyze the NCCI manual documentation below for **CPT {cpt_code}** and provide a comprehensive compliance analysis.
 
-**IMPORTANT**: You have been provided with {num_chunks} retrieved chunks. Some may be highly relevant to CPT {cpt_code}, while others may be less relevant or even unrelated. **You MUST review ALL chunks carefully and extract information from EVERY chunk that contains relevant information about CPT {cpt_code}**. Use multiple citations [1][2][3] when the same rule or concept appears in multiple chunks.
+**CRITICAL INSTRUCTION ON CHUNK USAGE**: 
+You have been provided with {num_chunks} candidate chunks as a reference pool. These are **candidates only** - you should carefully evaluate each one and **only cite the chunks that contain directly relevant, specific information about CPT {cpt_code}**. 
+
+**Expected behavior**: Not all {num_chunks} chunks will be relevant to a specific CPT code - some may contain general policies or unrelated information. **Only cite chunks that contain specific, actionable information about CPT {cpt_code}**. Do NOT force citations from all chunks - be selective and only use what is genuinely applicable.
+
+**Quality over quantity**: It's far better to cite 4 highly relevant chunks than to cite all {num_chunks} chunks with marginal relevance.
 
 ## Analysis Requirements
 
@@ -151,34 +176,34 @@ You MUST extract and analyze the following categories:
 - Which modifiers (e.g., 25, 59, LT, RT, 76, 77, 91, XE, XS, XP, XU) are explicitly allowed or required?
 - Under what clinical circumstances are these modifiers applicable?
 - Are there NCCI-associated modifiers or modifier indicators (0, 1, 9)?
-- Provide ALL modifier-related rules found in the documentation, being as comprehensive as possible
+- Provide modifier-related rules found in RELEVANT chunks
 - Include both general modifier policies and CPT-specific modifier rules
-- **Check ALL {num_chunks} chunks for modifier information**
+- **Only cite chunks that actually discuss modifiers relevant to CPT {cpt_code}**
 
 ### 2. **PTP Edit Rules (Procedure-to-Procedure Edits)**
-- Column 1/Column 2 edit relationships - provide ALL specific code pairs mentioned
+- Column 1/Column 2 edit relationships - provide specific code pairs mentioned
 - Which codes are mutually exclusive with CPT {cpt_code}?
 - CCMI (CCI Modifier Indicator) values and bypass conditions for each edit pair
 - Medically Unlikely Edits (MUE) if mentioned
-- List ALL PTP edits found in the documentation, including both general rules and specific code combinations
+- List PTP edits found in RELEVANT chunks
 - Include effective dates and policy changes if mentioned
-- **Check ALL {num_chunks} chunks for PTP edit information**
+- **Only cite chunks that actually discuss PTP edits relevant to CPT {cpt_code}**
 
 ### 3. **Misuse Opportunities & Compliance Risks**
-- Common billing errors or fraud patterns - provide ALL examples found
+- Common billing errors or fraud patterns - provide examples found
 - Unbundling risks (component codes vs comprehensive codes)
 - Anatomic considerations (bilateral procedures, separate sites, separate sessions)
 - Time-based restrictions or session limits
-- List ALL compliance risks, billing errors, and enforcement priorities mentioned in the documentation
+- List compliance risks and billing errors mentioned in RELEVANT chunks
 - Include specific examples of improper billing practices if provided
-- **Check ALL {num_chunks} chunks for compliance risk information**
+- **Only cite chunks that actually discuss compliance risks relevant to CPT {cpt_code}**
 
 ### 4. **Clinical Context & Special Rules**
 - Anatomic/procedural scope of CPT {cpt_code}
 - Special policies (e.g., add-on codes, starred procedures)
 - Documentation requirements
 - Bundling/unbundling principles specific to this code
-- **Check ALL {num_chunks} chunks for special rules**
+- **Only cite chunks that actually discuss special rules relevant to CPT {cpt_code}**
 
 ---
 
@@ -186,44 +211,51 @@ You MUST extract and analyze the following categories:
 
 ⚠️ **YOU MUST FOLLOW THESE RULES STRICTLY**:
 
-1. **Review ALL chunks**: Examine every single chunk provided (all {num_chunks} of them) for relevant information
-2. **Use multiple citations**: If the same information appears in chunks 1, 3, and 5, cite all three: [1][3][5]
-3. **Every factual claim MUST have a citation**: Use ONLY [1], [2], [3], etc. (numbers only, no additional text)
-4. **Cite chunk-specific details**: If chunk 2 mentions modifier 59 and chunk 7 mentions modifier 25, cite both separately
-5. **Only cite what's explicitly stated**: Do NOT infer beyond the text
-6. **DO NOT mention missing information**: If something is not in the documentation, simply do not mention it. Do NOT include statements like "Evidence insufficient" or "Not mentioned in documentation"
-7. **Quote exact language**: When discussing specific rules, quote verbatim from chunks
+1. **Cite only relevant chunks**: Only reference chunks that contain information directly applicable to CPT {cpt_code}. **Most chunks in the candidate pool will NOT be relevant** - skip them without hesitation.
+2. **Be selective**: Not all candidate chunks will be worth citing. Focus on chunks with specific information about CPT {cpt_code}. Quality citations are more valuable than quantity - cite only what is directly relevant.
+3. **Use multiple citations sparingly**: Only when multiple chunks discuss the exact same specific rule. Avoid citing multiple general policy chunks.
+4. **Every factual claim MUST have a citation**: Use ONLY [1], [2], [3], etc. (numbers only, no additional text)
+5. **Relevance test**: Before citing a chunk, ask "Does this chunk specifically mention CPT {cpt_code} or a rule that directly applies to it?" If no, skip it.
+6. **Only cite what's explicitly stated**: Do NOT infer beyond the text
+7. **DO NOT mention missing information**: If something is not in the documentation, simply do not mention it. Do NOT include statements like "Evidence insufficient" or "Not mentioned in documentation"
+8. **Quote exact language**: When discussing specific rules, quote verbatim from chunks
 8. **Keep citations simple**: Use ONLY the number in brackets, e.g., [1] or [1][2], NOT [1, NCCI Policy Manual, Ch. 1]
-9. **Be comprehensive**: Extract ALL relevant information from ALL chunks for each category
-10. **Prioritize relevance**: Focus on chunks that directly mention CPT {cpt_code} or its specific code family, but also include general NCCI policies that apply to this code
+9. **Be selective**: You are NOT required to use all {num_chunks} chunks. Only use the ones that are truly relevant to CPT {cpt_code}.
+10. **Prioritize direct relevance**: Focus on chunks that directly mention CPT {cpt_code} or its specific code family, and applicable general NCCI policies
 
 ---
 
-# OUTPUT FORMAT (Strict Markdown)
+# OUTPUT FORMAT (Strict JSON)
 
-## Modifier Rules for CPT {cpt_code}
+You MUST respond with ONLY a valid JSON object matching this exact structure:
 
-- **[Rule 1 description]** [citation]
-- **[Rule 2 description]** [citation]
-- ...
+```json
+{{
+  "modifier_rules": [
+    "Rule description with citation [1]",
+    "Another rule with multiple citations [2][3]"
+  ],
+  "ptp_edit_rules": [
+    "PTP edit rule with citation [1]"
+  ],
+  "compliance_risks": [
+    "Risk description with citation [5]"
+  ],
+  "clinical_context": [
+    "Clinical context rule with citation [1][2]"
+  ]
+}}
+```
 
-## PTP Edit Rules
+**CRITICAL JSON RULES**:
+- Each array should contain strings (one rule per string)
+- Each string MUST end with citation(s) in brackets like [1] or [2][3]
+- Do NOT add any text before or after the JSON object
+- Do NOT add markdown code fences (```) around the JSON
+- Do NOT include summary, conclusion, or any other fields
+- Ensure valid JSON syntax (proper quotes, commas, brackets)
 
-- **[Edit rule 1]** [citation]
-- **[Edit rule 2]** [citation]
-- ...
-
-## Misuse Opportunities & Compliance Risks
-
-- **[Risk pattern 1]** [citation]
-- **[Risk pattern 2]** [citation]
-- ...
-
-## Clinical Context & Special Rules
-
-- **[Special rule 1]** [citation]
-- **[Special rule 2]** [citation]
-- ...
+**STOP HERE - DO NOT ADD ANY SUMMARY, CONCLUSION, OR ADDITIONAL SECTIONS**
 
 ---
 
@@ -231,24 +263,29 @@ You MUST extract and analyze the following categories:
 
 - Be **specific and actionable** - this will be used for real compliance decisions
 - **Always cite sources** - uncited claims will be rejected
-- **Review ALL {num_chunks} chunks systematically** - don't stop after finding information in the first chunk
-- **Use multiple citations liberally** - if chunks 1, 4, and 7 all mention the same rule, cite all: [1][4][7]
+- **Be highly selective with citations**: You have {num_chunks} candidate chunks - evaluate each one independently. Some will be genuinely relevant with specific information about CPT {cpt_code}, others may only provide general background.
+- **Chunk evaluation**: Before citing any chunk, verify it contains specific information about CPT {cpt_code} or directly applicable rules
+- **Skip general policies**: Unless they specifically apply to CPT {cpt_code}, don't cite chunks with only general NCCI background information
+- **Use multiple citations rarely**: Only when 2+ chunks mention the exact same specific rule for CPT {cpt_code}
 - Focus on **NCCI-specific rules** - ignore general CPT guidance unless relevant to edits
 - If you quote text, use **exact quotes** from the chunks above
 - Organize clearly with bullet points for easy reference
-- **Extract ALL relevant information from ALL chunks** - be as comprehensive as possible
+- **Quality over quantity**: Better to cite 4 highly relevant chunks than 12 marginally relevant ones
 - **Do NOT mention gaps or missing information** - only report what is explicitly found
-- **Cross-reference across chunks** - synthesize information from multiple sources when they discuss the same topic
+- **CRITICAL: Do NOT add any summary, conclusion, or closing statements after the "Clinical Context & Special Rules" section**
+- **End your response immediately after the last bullet point in "Clinical Context & Special Rules"**
 
 ---
 
-# RETRIEVED DOCUMENTATION ({num_chunks} chunks)
+# RETRIEVED DOCUMENTATION ({num_chunks} candidate chunks - evaluate each for relevance)
+
+**INSTRUCTION**: The chunks below are candidates retrieved by the search system. Many will not be directly relevant to CPT {cpt_code}. Review each one and only cite those with specific, actionable information about this CPT code.
 
 {chunks_markdown}
 
 ---
 
-**BEGIN YOUR ANALYSIS NOW**:
+**BEGIN YOUR ANALYSIS NOW** (Remember: Cite only chunks with specific, relevant information - not all {num_chunks} chunks will apply):
 """
 
 
@@ -260,8 +297,10 @@ def call_llm_for_analysis(
     prompt: str, 
     temperature: float = DEFAULT_TEMPERATURE,
     max_tokens: int = DEFAULT_MAX_TOKENS
-) -> str:
-    
+) -> NCCIAnalysis:
+    """
+    Call LLM for analysis and return structured Pydantic model
+    """
     # Build messages
     messages = [
         {
@@ -269,7 +308,10 @@ def call_llm_for_analysis(
             "content": (
                 "You are an expert medical coding compliance analyst with deep expertise in "
                 "CMS NCCI (National Correct Coding Initiative) policy interpretation. "
-                "You provide precise, well-cited analyses for healthcare compliance decisions."
+                "You provide precise, well-cited analyses for healthcare compliance decisions. "
+                "CRITICAL: You MUST respond with ONLY valid JSON matching the specified structure. "
+                "Do NOT add any text before or after the JSON object. Do NOT add markdown code fences. "
+                "Do NOT add summary statements or conclusions within the JSON fields."
             )
         },
         {
@@ -279,8 +321,29 @@ def call_llm_for_analysis(
     ]
     
     try:
-        analysis = query_llm(messages, model="gpt-4.1")
-        return analysis
+        response_text = query_llm(messages, model="gpt-4.1")
+        
+        # Clean up response - remove markdown code fences if present
+        response_text = response_text.strip()
+        if response_text.startswith('```'):
+            # Remove ```json or ``` from start
+            response_text = response_text.split('\n', 1)[1] if '\n' in response_text else response_text[3:]
+        if response_text.endswith('```'):
+            response_text = response_text.rsplit('\n', 1)[0] if '\n' in response_text else response_text[:-3]
+        response_text = response_text.strip()
+        
+        # Parse JSON and validate with Pydantic
+        try:
+            data = json.loads(response_text)
+            analysis = NCCIAnalysis(**data)
+            return analysis
+        except json.JSONDecodeError as e:
+            print(f"\n❌ Invalid JSON response from LLM: {e}")
+            print(f"Response text:\n{response_text[:500]}\n")
+            raise ValueError(f"LLM did not return valid JSON: {e}")
+        except Exception as e:
+            print(f"\n❌ Error parsing response into NCCIAnalysis model: {e}")
+            raise
         
     except Exception as e:
         print(f"\n❌ Error calling Azure OpenAI: {e}\n")
@@ -293,13 +356,23 @@ def call_llm_for_analysis(
 
 def save_analysis_output(
     cpt_code: int, 
-    analysis: str, 
+    analysis: NCCIAnalysis, 
     chunks: List[Dict], 
     metadata: Dict,
     output_dir: Optional[Path] = None
 ) -> Path:
     """
-    Save analysis report with citations to markdown file.
+    Save structured analysis to markdown file.
+    
+    Args:
+        cpt_code: CPT code
+        analysis: Validated NCCIAnalysis Pydantic model
+        chunks: List of retrieved chunks
+        metadata: Metadata from retrieval
+        output_dir: Output directory
+        
+    Returns:
+        Path to saved markdown file
     """
     if output_dir is None:
         output_dir = Path(__file__).parent.parent / 'output'
@@ -308,11 +381,42 @@ def save_analysis_output(
     output_file = output_dir / f'llm_analysis_cpt_{cpt_code}.md'
     
     import re
+    
+    # Build markdown content from structured data
+    markdown_sections = []
+    
+    # Modifier Rules section
+    markdown_sections.append(f"## Modifier Rules for CPT {cpt_code}\n")
+    for rule in analysis.modifier_rules:
+        markdown_sections.append(f"- {rule}")
+    markdown_sections.append("")
+    
+    # PTP Edit Rules section
+    markdown_sections.append("## PTP Edit Rules\n")
+    for rule in analysis.ptp_edit_rules:
+        markdown_sections.append(f"- {rule}")
+    markdown_sections.append("")
+    
+    # Compliance Risks section
+    markdown_sections.append("## Misuse Opportunities & Compliance Risks\n")
+    for risk in analysis.compliance_risks:
+        markdown_sections.append(f"- {risk}")
+    markdown_sections.append("")
+    
+    # Clinical Context section
+    markdown_sections.append("## Clinical Context & Special Rules\n")
+    for context in analysis.clinical_context:
+        markdown_sections.append(f"- {context}")
+    
+    analysis_markdown = "\n".join(markdown_sections)
+    
+    # Extract all cited numbers from the analysis
     cited_numbers = set()
     citation_pattern = r'\[(\d+)\]'
-    for match in re.finditer(citation_pattern, analysis):
+    for match in re.finditer(citation_pattern, analysis_markdown):
         cited_numbers.add(int(match.group(1)))
     
+    # Build references list for cited chunks only
     references_list = []
     for i in sorted(cited_numbers):
         if i <= len(chunks):
@@ -325,10 +429,15 @@ def save_analysis_output(
             references_list.append(f"{i}. `{chunk_id}` - Pages {page_str}, {section}")
     
     references_text = "\n".join(references_list) if references_list else "No citations used."
+    
     full_output = f"""# 🎯 NCCI Compliance Analysis for CPT {cpt_code}
-{analysis.strip()}
+
+{analysis_markdown}
+
 ---
+
 ## References
+
 {references_text}
 """
     
@@ -344,7 +453,8 @@ def save_analysis_output(
 def ncci_llm_analysis(
     cpt_code: int, 
     temperature: float = DEFAULT_TEMPERATURE,
-    max_tokens: int = DEFAULT_MAX_TOKENS
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+    auto_build: bool = False
 ) -> Path:
     """
     Run complete LLM analysis pipeline with citations.
@@ -353,6 +463,7 @@ def ncci_llm_analysis(
         cpt_code: CPT code (e.g. 97810)
         temperature: LLM generation temperature (0.0=strict, 1.0=creative)
         max_tokens: Maximum tokens to generate
+        auto_build: If True, automatically build indices if missing (default: False)
     
     Returns:
         Path to output file
@@ -368,7 +479,9 @@ def ncci_llm_analysis(
         
         if not chunks_path.exists():
             print(f"[➡️ Step 0/6] Retrieved chunks not found, running retrieval pipeline...\n")
-            multi_stage_hybrid_rag(target_cpt_code=cpt_code, top_k=15)
+            result = multi_stage_hybrid_rag(target_cpt_code=cpt_code, top_k=15, auto_build=auto_build)
+            if result is None:
+                raise RuntimeError("Retrieval failed - indices may be missing. Please run build_all.py first.")
             print(f"✓ Retrieval completed\n")
         
         print(f"[➡️ Step 1/6] Loading retrieved chunks for CPT {cpt_code}...\n")
