@@ -355,10 +355,16 @@ if "show_feedback" not in st.session_state:
 with st.sidebar:
     st.markdown("<div style='text-align: center; padding-bottom: 10px;'>", unsafe_allow_html=True)
     try:
-        logo = Image.open("logo.png")
-        st.image(logo, width=240)
+        # Get absolute path to logo.png
+        import pathlib
+        logo_path = pathlib.Path(__file__).parent / "logo.png"
+        if logo_path.exists():
+            logo = Image.open(str(logo_path))
+            st.image(logo, width=240)
+        else:
+            st.warning(f"Logo not found at: {logo_path}")
     except Exception as e:
-        st.warning("Logo image not found or failed to load.")
+        st.warning(f"Logo image failed to load: {e}")
     st.markdown("</div>", unsafe_allow_html=True)
 
     # Navigation
@@ -490,15 +496,21 @@ with st.sidebar:
 
 # Main content area - Add large logo at the top using pure HTML
 try:
-    with open("logo.png", "rb") as f:
-        logo_base64 = base64.b64encode(f.read()).decode()
-    st.markdown(f"""
-        <div class="main-logo-container">
-            <img src="data:image/png;base64,{logo_base64}" style="max-width: 500px; width: 50%; height: auto; display: block; margin: 0 auto;">
-        </div>
-    """, unsafe_allow_html=True)
+    # Get absolute path to logo.png
+    import pathlib
+    logo_path = pathlib.Path(__file__).parent / "logo.png"
+    if logo_path.exists():
+        with open(str(logo_path), "rb") as f:
+            logo_base64 = base64.b64encode(f.read()).decode()
+        st.markdown(f"""
+            <div class="main-logo-container">
+                <img src="data:image/png;base64,{logo_base64}" style="max-width: 500px; width: 50%; height: auto; display: block; margin: 0 auto;">
+            </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="main-logo-container"><div style="color: #e0e0e0; font-size: 2rem; font-weight: 600; text-align: center;">🧠 CCV Research AI</div></div>', unsafe_allow_html=True)
 except Exception as e:
-    st.markdown('<div class="main-logo-container"><div style="color: #e0e0e0; font-size: 2rem; font-weight: 600; text-align: center;">🧠 CCV Research AI</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="main-logo-container"><div style="color: #e0e0e0; font-size: 2rem; font-weight: 600; text-align: center;">🧠 CCV Research AI</div><div style="color: #999; font-size: 0.8rem; text-align: center;">Logo error: {e}</div></div>', unsafe_allow_html=True)
 
 # Main content area - switch between Chat, APC, and Feedback modes
 if st.session_state.show_feedback:
