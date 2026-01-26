@@ -88,8 +88,8 @@ def filter_ptp_tables_by_cpts(cpt_codes):
     """
     print(f"\n📊 Loading and filtering PTP Edit Tables for {len(cpt_codes)} CPT code(s)...")
     
-    modifier_0_path = "output/preprocessed_ptp_edit_table_modifier0.csv"
-    modifier_1_path = "output/preprocessed_ptp_edit_table_modifier1.csv"
+    modifier_0_path = "data/preprocessed_ptp_edit_table_modifier0.csv"
+    modifier_1_path = "data/preprocessed_ptp_edit_table_modifier1.csv"
     
     results = {}
     
@@ -335,7 +335,9 @@ def ncci_manual_retrieval(target_cpt):
     # Generate new analysis
     print(f"   🔄 Generating new NCCI manual analysis...")
     try:
-        output_file_path = ncci_llm_analysis(target_cpt)
+        # Call with auto_build=True for Streamlit app (non-interactive)
+        # This will automatically build indices if missing
+        output_file_path = ncci_llm_analysis(target_cpt, auto_build=True)
         
         with open(output_file_path, 'r', encoding='utf-8') as f:
             manual_content = f.read()
