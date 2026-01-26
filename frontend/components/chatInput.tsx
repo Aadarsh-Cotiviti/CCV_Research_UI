@@ -75,7 +75,7 @@ export const ChatInputBox: FC<ChatInputProps> = ({
   const Icon = loading ? Spinner : SendIcon;
 
   return (
-    <div className={cn("flex-1 flex flex-col gap-1 text-left", className)}>
+    <div className={cn("flex-1 flex flex-col gap-1 text-left shrink-0", className)}>
       <InputGroup className="flex-1">
         <InputGroupTextarea
           className="min-h-4"

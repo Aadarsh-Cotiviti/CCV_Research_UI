@@ -2,6 +2,7 @@ import OpenAI, { AzureOpenAI } from "openai";
 import { AzureClientOptions } from "openai/azure";
 import { AutoParseableResponseFormat } from "openai/lib/parser.mjs";
 import { ResponsesModel } from "openai/resources/shared.mjs";
+import { ChatRequest, queryllmChatStream } from "./backendClient";
 
 const MODEL_CONFIGS: Partial<Record<ResponsesModel, AzureClientOptions>> = {
   "gpt-4.1": {
@@ -48,25 +49,33 @@ const MODEL_CONFIGS: Partial<Record<ResponsesModel, AzureClientOptions>> = {
 
 export const AVAILABLE_MODELS: ResponsesModel[] = Object.keys(MODEL_CONFIGS);
 
-export const queryllmStream = async (
-  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-  model: ResponsesModel
-) => {
+export const queryllmStream = async (messages: ChatRequest["messages"], model: ResponsesModel) => {
   if (!AVAILABLE_MODELS.includes(model)) throw new Error("Model is not available");
-  const client = new AzureOpenAI(MODEL_CONFIGS[model]);
-  const responseStream = await client.chat.completions.create({
+  // const client = new AzureOpenAI(MODEL_CONFIGS[model]);
+  // const responseStream = await client.chat.completions.create({
+  //   model,
+  //   messages,
+  //   stream: true,
+  // });
+
+  const resp = await queryllmChatStream({
     model,
     messages,
-    stream: true,
   });
+  if (resp.error) {
+    throw new Error(`LLM query failed: ${resp.error}`);
+  }
+  if (!resp.data) {
+    throw new Error("LLM query returned no data");
+  }
 
-  return responseStream;
+  return resp.data;
 };
 
 export const queryllm = async <T = unknown>(
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
   model: ResponsesModel,
-  textFormat?: AutoParseableResponseFormat<T>
+  textFormat?: AutoParseableResponseFormat<T>,
 ): Promise<T> => {
   if (!AVAILABLE_MODELS.includes(model)) throw new Error("Model is not available");
   const client = new AzureOpenAI(MODEL_CONFIGS[model]);

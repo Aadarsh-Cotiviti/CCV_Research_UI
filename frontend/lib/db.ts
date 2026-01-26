@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 import { drizzle } from "drizzle-orm/libsql";
 import * as schemas from "../db/schemas";
 import { and, desc, eq, inArray, not, sql } from "drizzle-orm";
-import { ResearchSection } from "@/app/(auth-protected)/apc-research/server-actions";
+import { ResearchSections } from "@/app/(auth-protected)/apc-research/server-actions";
 import { ChatNavLinks } from "@/app/api/[[...route]]/_authRoutes";
 
 const dbUrl = pathToFileURL(path.join(process.cwd(), process.env.DB_URL!)).href;
@@ -81,7 +81,7 @@ export const getChatSession = async (oktaId: string, sessionId: string, limit?: 
 
 export const createChatSession = async (
   userId: string,
-  messages: Omit<schemas.MessageInsert, "chatId">[]
+  messages: Omit<schemas.MessageInsert, "chatId">[],
 ) => {
   const userMsg = messages.find((msg) => msg.role === "user");
   if (!userMsg) throw new Error("Missing initial user msg");
@@ -110,9 +110,9 @@ export const createChatSession = async (
 };
 
 export const addToChatSessionMessage = async (
-  oktaId: string,
+  uid: string,
   chatSessionId: string,
-  newMessage: schemas.MessageInsert
+  newMessage: schemas.MessageInsert,
 ) => {
   return db.transaction(async (tx) => {
     const session = await tx.query.sessions.findFirst({
@@ -123,7 +123,7 @@ export const addToChatSessionMessage = async (
       },
     });
     if (!session || session.type !== "chat") throw new Error("Chat does not exist");
-    if (session.user.oktaId !== oktaId) throw new Error("Unauthorized");
+    if (session.user.id !== uid) throw new Error("Unauthorized");
 
     const targetSection =
       session.sections.find((section) => section.chatId === newMessage.chatId) ||
@@ -153,7 +153,7 @@ export const updateChatMessageContent = async (messageId: string, newContent: st
 
 export const submitFeedback = async (
   messageId: string,
-  feedbackData: schemas.MessageFeedbackInsert
+  feedbackData: schemas.MessageFeedbackInsert,
 ) => {
   console.log("Submitting feedback for messageId:", messageId);
   console.log("Feedback data:", feedbackData);
@@ -183,7 +183,7 @@ export const addToResearchSessionChat = async (
   oktaId: string,
   researchSessionId: string,
   researchSectionId: number,
-  newMessage: schemas.MessageInsert
+  newMessage: schemas.MessageInsert,
 ) => {
   await db.transaction(async (tx) => {
     const researchSession = await tx.query.sessions.findFirst({
@@ -200,7 +200,7 @@ export const addToResearchSessionChat = async (
       where: () =>
         and(
           eq(schemas.sections.id, researchSectionId),
-          eq(schemas.sections.sessionId, researchSessionId)
+          eq(schemas.sections.sessionId, researchSessionId),
         ),
     });
     if (researchSection === undefined) throw new Error("Research Section does not exist");
@@ -213,12 +213,23 @@ export const addToResearchSessionChat = async (
   });
 };
 
+const TITLES = [
+  "Section 1: Code Description Analysis",
+  "Section 2: Guideline Examination",
+  "Section 3: Payment Rate Comparison",
+  "Section 4: Device Code Analysis",
+  "Section 5: NCCI Compliance Check",
+  "Section 6: Reference Material Review",
+  "Final Assessment",
+];
+
 export const createResearchSession = async (
   userId: string,
   topic: string,
-  sections: ResearchSection[],
-  modelUsed: string
+  sections: ResearchSections,
+  modelUsed: string,
 ) => {
+  const sectionArr = Object.values(sections);
   return await db.transaction(async (tx) => {
     console.log("Creating research session for userId:", userId, "with topic:", topic);
     const [researchSession] = await tx
@@ -228,21 +239,33 @@ export const createResearchSession = async (
     console.log("Created research session for userId:", userId, "with topic:", topic);
     const chats = await tx
       .insert(schemas.chat)
-      .values(sections.map(() => ({})))
+      .values(sectionArr.map(() => ({})))
       .returning();
     console.log("Created chats for research session:", chats);
-    const sectionChats: schemas.MessageInsert[] = chats.map((chat, i) => ({
-      content: sections[i].content,
-      role: "assistant",
-      chatId: chat.id,
-      modelUsed,
-    }));
+    const sectionChats: schemas.MessageInsert[] = chats.map((chat, i) => {
+      const section = sectionArr[i];
+      if (section.status === "success") {
+        return {
+          chatId: chat.id,
+          content: typeof section.data === "string" ? section.data : JSON.stringify(section.data),
+          role: "assistant",
+          modelUsed,
+        };
+      } else {
+        return {
+          chatId: chat.id,
+          content: `Error generating section: ${section.error || "Unknown error"}`,
+          role: "assistant",
+          modelUsed,
+        };
+      }
+    });
     console.log("Inserting section chats:", sectionChats);
     const [] = await tx.insert(schemas.messages).values(sectionChats).returning();
-    const researchSectionData: schemas.SectionInsert[] = sections.map((section, i) => ({
+    const researchSectionData: schemas.SectionInsert[] = sectionArr.map((section, i) => ({
       sessionId: researchSession.id,
       chatId: chats[i].id,
-      title: section.title,
+      title: TITLES[i],
     }));
     console.log("Inserting research sections:", researchSectionData);
     const [] = await tx.insert(schemas.sections).values(researchSectionData).returning();
@@ -357,7 +380,7 @@ export const updateChatTopic = async (
   oktaId: string,
   chatId: string,
   newTopic: string,
-  chatType: "chat" | "apc"
+  chatType: "chat" | "apc",
 ) => {
   return await db.transaction(async (tx) => {
     const session = await tx.query.sessions.findFirst({
@@ -380,7 +403,7 @@ export const updateChatTopic = async (
 export const deleteChatSession = async (
   oktaId: string,
   chatId: string,
-  chatType: "chat" | "apc"
+  chatType: "chat" | "apc",
 ) => {
   return await db.transaction(async (tx) => {
     const session = await tx.query.sessions.findFirst({
@@ -486,7 +509,7 @@ export const createHighlightForUser = async (
     startOffset: number;
     endOffset: number;
     notes?: string | null;
-  }
+  },
 ) => {
   const user = await db.query.users.findFirst({ where: eq(schemas.users.oktaId, oktaId) });
   if (!user) throw new Error("User not found");
@@ -517,14 +540,14 @@ export const deleteHighlightForUser = async (oktaId: string, highlightId: string
   await db
     .delete(schemas.highlightedText)
     .where(
-      and(eq(schemas.highlightedText.id, highlightId), eq(schemas.highlightedText.userId, user.id))
+      and(eq(schemas.highlightedText.id, highlightId), eq(schemas.highlightedText.userId, user.id)),
     );
 };
 
 export const updateHighlightNotesForUser = async (
   oktaId: string,
   highlightId: string,
-  notes?: string | null
+  notes?: string | null,
 ) => {
   const user = await db.query.users.findFirst({ where: eq(schemas.users.oktaId, oktaId) });
   if (!user) throw new Error("User not found");
@@ -533,7 +556,7 @@ export const updateHighlightNotesForUser = async (
     .update(schemas.highlightedText)
     .set({ notes: notes ?? null })
     .where(
-      and(eq(schemas.highlightedText.id, highlightId), eq(schemas.highlightedText.userId, user.id))
+      and(eq(schemas.highlightedText.id, highlightId), eq(schemas.highlightedText.userId, user.id)),
     )
     .returning();
 

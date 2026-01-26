@@ -86,7 +86,10 @@ app.post("/chat", async (c) => {
       return jsonError(c, 400, "Model not supported", "bad_request");
     }
     const responseStream = await queryllmStream(ctx, model);
-    const newMsg = await addToChatSessionMessage(c.var.user.oktaId, sessionId, {
+    const reader = responseStream.getReader();
+    const decoder = new TextDecoder();
+
+    const newMsg = await addToChatSessionMessage(c.var.user.id, sessionId, {
       role: "assistant",
       content: "",
       modelUsed: model,
@@ -94,22 +97,24 @@ app.post("/chat", async (c) => {
     });
     return streamText(c, async (stream) => {
       let finalText = "";
-      for await (const chunk of responseStream) {
-        if (chunk.choices.length > 0) {
-          const content = chunk.choices[0].delta.content;
-          if (content) {
-            finalText += content;
-            // Send content as SSE data event
-            await stream.write(`data: ${JSON.stringify({ type: "content", content })}\n\n`);
-          }
-        }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunkText = decoder.decode(value, { stream: true });
+        if (!chunkText) continue;
+
+        finalText += chunkText;
+        // Forward chunk as SSE data event to the client
+        await stream.write(`data: ${JSON.stringify({ type: "content", content: chunkText })}\n\n`);
       }
 
       await updateChatMessageContent(newMsg.id, finalText);
 
       // Send the message ID as metadata event
       await stream.write(
-        `data: ${JSON.stringify({ type: "messageId", messageId: newMsg.id })}\n\n`
+        `data: ${JSON.stringify({ type: "messageId", messageId: newMsg.id })}\n\n`,
       );
     });
   } catch (error) {
@@ -134,7 +139,7 @@ app.get("/chat-history", async (c) => {
 app.post("/cpt-codes", async (c) => {
   try {
     const { topic, model } = await c.req.json<{ topic: string; model: ResponsesModel }>();
-    return c.json((await fetchCptCodes(topic, model)).cpt_codes_and_descriptions);
+    return c.json(await fetchCptCodes(topic, model));
   } catch (error) {
     console.error("Error fetching CPT codes:", error);
     return jsonError(c, 500, "Failed to fetch CPT codes", "internal_error");
@@ -177,11 +182,11 @@ app.post("/create-research", async (c) => {
       model: ResponsesModel;
     }>();
     const sections = await createResearch(targetCpt, contextDetails, model);
-    const session = await createResearchSession(c.var.user.id, targetCpt, sections, model);
+    const session = await createResearchSession(c.var.user.id, targetCpt, sections.sections, model);
     console.log(session, "Created research session");
     return c.json({ id: session.id });
   } catch (error) {
-    console.error("Error creating research session:", error);
+    console.error("Error creating research session:", JSON.stringify(error));
     return jsonError(c, 500, "Failed to create research session", "internal_error");
   }
 });
@@ -369,7 +374,7 @@ app.patch("/highlights/:id", async (c) => {
     const updatedHighlight = await updateHighlightNotesForUser(
       c.var.user.oktaId,
       highlightId,
-      notes
+      notes,
     );
     return c.json(updatedHighlight);
   } catch (error) {

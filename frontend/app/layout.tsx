@@ -56,7 +56,7 @@ export default async function RootLayout({
                     <AppSidebar />
                     <div className="relative flex-1">
                       <div className="bg-sidebar size-full"></div>
-                      <div className="absolute rounded-tl-2xl inset-0 bg-background">
+                      <div className="absolute rounded-tl-2xl inset-0 bg-background overflow-hidden">
                         {children}
                       </div>
                     </div>

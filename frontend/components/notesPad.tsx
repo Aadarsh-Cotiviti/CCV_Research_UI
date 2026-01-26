@@ -101,15 +101,18 @@ export const NotePadWrapper = ({ children, initNotes }: NotePadWrapperProps) => 
     setSidebarWidth(next);
   }, []);
 
-  const handleMouseUp = useCallback(function onMouseUp() {
-    draggingRef.current = false;
-    window.removeEventListener("mousemove", handleMouseMove);
-    window.removeEventListener("mouseup", onMouseUp);
-    if (previousUserSelectRef.current !== null) {
-      document.body.style.userSelect = previousUserSelectRef.current;
-      previousUserSelectRef.current = null;
-    }
-  }, [handleMouseMove]);
+  const handleMouseUp = useCallback(
+    function onMouseUp() {
+      draggingRef.current = false;
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      if (previousUserSelectRef.current !== null) {
+        document.body.style.userSelect = previousUserSelectRef.current;
+        previousUserSelectRef.current = null;
+      }
+    },
+    [handleMouseMove],
+  );
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -125,8 +128,8 @@ export const NotePadWrapper = ({ children, initNotes }: NotePadWrapperProps) => 
   const spacerWidth = isOpen ? sidebarWidth : 12; // keep room so overlay never covers content
 
   return (
-    <div className="relative flex flex-1">
-      <div className="relative flex-1 min-w-0">
+    <div className="relative flex size-full">
+      <div className="relative flex-1 min-w-0 size-full flex flex-col overflow-hidden">
         {!isOpen && (
           <Button className="absolute top-4 right-4" onClick={toggleNotePad} variant="ghost">
             <PenIcon /> Open Notes
@@ -157,7 +160,7 @@ export const NotePadWrapper = ({ children, initNotes }: NotePadWrapperProps) => 
           "absolute inset-y-0 right-0 flex flex-col border-l border-border bg-card/90 shadow-lg backdrop-blur-sm transition-all duration-200 ease-out overflow-hidden",
           isOpen
             ? "translate-x-0 opacity-100 pointer-events-auto"
-            : "translate-x-full opacity-0 pointer-events-none"
+            : "translate-x-full opacity-0 pointer-events-none",
         )}
         style={{ width: sidebarWidth }}
       >

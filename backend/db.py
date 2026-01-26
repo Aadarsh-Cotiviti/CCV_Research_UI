@@ -27,4 +27,4 @@ get_sessions = get_interaction_sessions
 get_session_history = get_interaction_history
 rename_session = rename_interaction_session
 delete_session = delete_interaction_session
-def save_interaction(session_id, topic, persona, question, response):
+# def save_interaction(session_id, topic, persona, question, response):

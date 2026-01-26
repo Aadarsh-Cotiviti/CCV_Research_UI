@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { DocumentLink } from "./documentLink";
 import { FileIcon } from "lucide-react";
 import { ChatFeedback } from "./chatFeedback";
-import { FC, useEffect, useRef } from "react";
+import React, { FC, ReactNode, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -14,8 +14,20 @@ import { ClientSessionMessage } from "@/lib/db";
 import { useTextHighlightingContext } from "./textHighlightingProvider";
 import { TextSelectionMenu } from "./textSelectionMenu";
 import { TextSelection } from "@/hooks/useTextHighlighting";
-export const ChatDisplay = () => {
-  const { currentMessages, aiResponse, loading } = useChatContext();
+
+export type AssistantRendererProps = {
+  message: ClientSessionMessage;
+  defaultRenderer: () => ReactNode;
+};
+
+export type AssistantRenderer = FC<AssistantRendererProps>;
+
+type ChatDisplayProps = {
+  assistantRenderers?: AssistantRenderer[];
+};
+
+export const ChatDisplay: FC<ChatDisplayProps> = ({ assistantRenderers }) => {
+  const { currentMessages, aiResponse, loading, currentSection, chatData } = useChatContext();
   const {
     isSelectionMenuOpen,
     currentSelection,
@@ -25,7 +37,7 @@ export const ChatDisplay = () => {
     clearSelection,
   } = useTextHighlightingContext();
   const lastUserMessageRef = useRef<HTMLDivElement>(null);
-
+  const selectionIndex = chatData.findIndex((section) => section.sectionId === currentSection);
   useEffect(() => {
     // Scroll the last user message to the top of the view
     const lastMsg = currentMessages.at(-1);
@@ -42,9 +54,22 @@ export const ChatDisplay = () => {
     await saveHighlight(selection, notes);
   };
 
+  const renderAssistant = (message: ClientSessionMessage) => {
+    const Renderer = selectionIndex >= 0 ? assistantRenderers?.[selectionIndex] : undefined;
+    if (!Renderer) {
+      return <DefaultAssistantRender data={message} />;
+    }
+    return (
+      <Renderer
+        message={message}
+        defaultRenderer={() => <DefaultAssistantRender data={message} />}
+      />
+    );
+  };
+
   return (
     <div className="flex-1 p-8 overflow-y-auto">
-      <div className="mx-auto flex flex-col overflow-y-auto items-start max-w-5xl">
+      <div className="mx-auto flex flex-col items-start max-w-4xl">
         {currentMessages.map((message, index) => {
           const isLastUserMessage = message.role === "user" && index === currentMessages.length - 1;
 
@@ -53,7 +78,7 @@ export const ChatDisplay = () => {
               <UserMessage data={message} />
             </div>
           ) : (
-            <AssistantMessage key={message.id} data={message} />
+            <div key={message.id}>{renderAssistant(message)}</div>
           );
         })}
         {loading && aiResponse === "" && (
@@ -64,8 +89,8 @@ export const ChatDisplay = () => {
           </div>
         )}
         {aiResponse && (
-          <AssistantMessage
-            data={{
+          <div key="live-ai-response">
+            {renderAssistant({
               content: aiResponse,
               createdAt: new Date(),
               documents: null,
@@ -75,8 +100,8 @@ export const ChatDisplay = () => {
               chatId: "",
               feedback: null,
               feedbackId: null,
-            }}
-          />
+            })}
+          </div>
         )}
       </div>
       <div className="pb-[100svh]" />
@@ -93,7 +118,7 @@ export const ChatDisplay = () => {
   );
 };
 
-const Icon = ({ children }: { children: React.ReactNode }) => {
+const Icon = ({ children }: { children: ReactNode }) => {
   return (
     <span className="flex items-center justify-center rounded-full size-10 shrink-0 bg-background">
       {children}
@@ -101,7 +126,7 @@ const Icon = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-const AssistantMessage = ({ data }: { data: ClientSessionMessage }) => {
+const DefaultAssistantRender = ({ data }: { data: ClientSessionMessage }) => {
   const { handleTextSelection } = useTextHighlightingContext();
   const { sessionId } = useParams<{ sessionId: string }>();
   const { currentSection } = useChatContext();
@@ -113,7 +138,6 @@ const AssistantMessage = ({ data }: { data: ClientSessionMessage }) => {
     const sectionId = Number.isFinite(sectionNumeric) ? sectionNumeric : undefined;
     handleTextSelection(event, data.content, data.id, sessionId, sectionId);
   };
-
   return (
     <div className="flex gap-2 mt-4 w-full">
       <div className="flex flex-col w-full">
@@ -162,15 +186,25 @@ const UserMessage = ({ data }: { data: ClientSessionMessage }) => {
 };
 
 interface SectionSelectorProps {
-  children: React.ReactNode;
+  children: ReactNode;
+  assistantRenderers?: AssistantRenderer[];
 }
 
-export const SectionTabDisplay: FC<SectionSelectorProps> = ({ children }) => {
+export const SectionTabDisplay: FC<SectionSelectorProps> = ({ children, assistantRenderers }) => {
   const { currentSection: selectedSection, setSelectedSection, chatData } = useChatContext();
+  const renderedChildren = React.Children.map(children, (child) => {
+    if (!React.isValidElement(child)) return child;
+    if (child.type === ChatDisplay) {
+      return React.cloneElement(child as React.ReactElement<ChatDisplayProps>, {
+        assistantRenderers,
+      });
+    }
+    return child;
+  });
 
   return (
-    <div className="flex flex-1 flex-col max-w-5xl mx-auto px-6 [&>div:nth-child(2)]:p-0 overflow-y-auto">
-      <div className="w-full gap-2 grid grid-cols-7 py-4">
+    <div className="flex flex-1 flex-col size-full overflow-y-auto">
+      <div className="w-full gap-2 grid grid-cols-7 py-4 max-w-5xl mx-auto">
         {chatData.map((data) => (
           <div
             key={data.sectionId}
@@ -183,7 +217,7 @@ export const SectionTabDisplay: FC<SectionSelectorProps> = ({ children }) => {
           </div>
         ))}
       </div>
-      {children}
+      {renderedChildren}
     </div>
   );
 };

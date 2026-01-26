@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowBigLeftIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type CptData } from "@/app/(auth-protected)/apc-research/server-actions";
+import { Spinner } from "@/components/ui/spinner";
 
 interface ApcData {
   topic: string;
@@ -81,25 +82,49 @@ export const NextStepButton: FC<ButtonHTMLAttributes<HTMLButtonElement>> = (prop
 export const StartResearchButton: FC<ButtonHTMLAttributes<HTMLButtonElement>> = (props) => {
   const router = useRouter();
   const { data } = useApcState();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const onClick = async () => {
     if (data.selectedCpt === null) return;
-    const response = await fetch("/api/create-research", {
-      method: "POST",
-      body: JSON.stringify({
-        targetCpt: data.selectedCpt,
-        contextDetails: data.additionalContext,
-        model: data.chosenModel,
-      }),
-    });
+    setError(null);
+    setLoading(true);
+    try {
+      const response = await fetch("/api/create-research", {
+        method: "POST",
+        body: JSON.stringify({
+          targetCpt: data.selectedCpt.code,
+          contextDetails: data.additionalContext,
+          model: data.chosenModel,
+        }),
+      });
 
-    const { id } = await response.json();
-    const url = `/apc-research/${id}`;
-    router.replace(url);
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload || !payload.id) {
+        const message =
+          (payload as { error?: string; message?: string } | null)?.error ||
+          (payload as { error?: string; message?: string } | null)?.message ||
+          "Failed to start research. Please try again.";
+        throw new Error(message);
+      }
+
+      const url = `/apc-research/${payload.id}`;
+      router.replace(url);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to start research. Please try again.";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <Button size="lg" className="flex-1" onClick={onClick} {...props}>
-      Start Research
-    </Button>
+    <div className="flex-1">
+      <Button size="lg" className="w-full" onClick={onClick} {...props} disabled={loading}>
+        Start Research
+        {loading ? <Spinner /> : ""}
+      </Button>
+      {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+    </div>
   );
 };

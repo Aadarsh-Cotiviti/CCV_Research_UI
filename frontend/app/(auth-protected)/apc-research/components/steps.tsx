@@ -100,7 +100,7 @@ const CPTDataDisplay: FC<CPTDataDisplay> = ({ data, onClick, selected }) => {
     >
       <div className="p-2 bg-accent rounded">{data.code}</div>
       <ItemContent>
-        <ItemTitle>{data.title}</ItemTitle>
+        <ItemTitle></ItemTitle>
         <ItemDescription>{data.description}</ItemDescription>
       </ItemContent>
     </Item>

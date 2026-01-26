@@ -33,7 +33,6 @@ const Page: FC<Props> = async ({ params }) => {
       chatId: sectionId,
     });
   };
-
   const initData: ChatData = sessionData.sections.map((section) => ({
     messages: section.chat.messages,
     chatId: section.chatId,

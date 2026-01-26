@@ -7,6 +7,7 @@ import { NotePadWrapper } from "@/components/notesPad";
 import { TextHighlightingProvider } from "@/components/textHighlightingProvider";
 import { HighlightedText } from "@/db/schemas";
 import { FC, useState } from "react";
+import { sectionRenderers } from "../components/sectionRenders";
 
 interface Props {
   initNotes: string;
@@ -20,20 +21,21 @@ export const ChatPage: FC<Props> = ({ initNotes, initHighlightedText }) => {
     const formattedQuote = `> ${text.replace(/\n/g, "\n> ")}\n`;
     setQuotedText(formattedQuote);
   };
+
+  const sectionRenders = sectionRenderers;
+
   return (
     <TextHighlightingProvider
       onQuoteInChat={handleQuoteInChat}
       initHighlightedText={initHighlightedText}
     >
       <NotePadWrapper initNotes={initNotes}>
-        <div className="flex-1 flex flex-col overflow-y-hidden">
-          <SectionTabDisplay>
-            <ChatDisplay />
-          </SectionTabDisplay>
-          <div className="py-4 border-t-2 px-8">
-            <div className="max-w-5xl mx-auto">
-              <ChatInputDisplay quotedText={quotedText} onQuotedTextChange={setQuotedText} />
-            </div>
+        <SectionTabDisplay assistantRenderers={sectionRenders}>
+          <ChatDisplay />
+        </SectionTabDisplay>
+        <div className="py-4 border-t-2 px-8">
+          <div className="max-w-4xl mx-auto">
+            <ChatInputDisplay quotedText={quotedText} onQuotedTextChange={setQuotedText} />
           </div>
         </div>
       </NotePadWrapper>

@@ -25,12 +25,10 @@ export const ChatPage: FC<Props> = ({ initNotes, initHighlightedText }) => {
       initHighlightedText={initHighlightedText}
     >
       <NotePadWrapper initNotes={initNotes}>
-        <div className="flex-1 flex flex-col overflow-y-hidden">
-          <ChatDisplay />
-          <div className="py-4 border-t-2 px-8">
-            <div className="max-w-5xl mx-auto">
-              <ChatInputDisplay quotedText={quotedText} onQuotedTextChange={setQuotedText} />
-            </div>
+        <ChatDisplay />
+        <div className="py-4 border-t-2 px-8">
+          <div className="max-w-4xl mx-auto">
+            <ChatInputDisplay quotedText={quotedText} onQuotedTextChange={setQuotedText} />
           </div>
         </div>
       </NotePadWrapper>

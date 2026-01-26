@@ -91,15 +91,16 @@ export const obtainUserData = createMiddleware<UserAuthEnv>(async (c, next) => {
       return c.json({ error: "Unauthorized" }, 401);
     }
     const claims = await verifySessionToken(sessionjwt);
+
     const userId = claims.uid;
     if (!userId) {
       return c.json({ error: "Unauthorized" }, 401);
     }
-
     const user = await getUserData(userId);
     if (!user) {
       return c.json({ error: "User not found" }, 401);
     }
+    console.log(`Authenticated user: ${user.email} (ID: ${userId})`);
 
     c.set("user", user);
     await next();
