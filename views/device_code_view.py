@@ -99,101 +99,25 @@ def format_structured_data(data):
         output.append("---")
         output.append("")
     
-    # LLM analysis for codes with local descriptions but no KB change tracking
-    if data.get('internal_llm_recoding_result'):
-        output.append('<h3 class="section-heading">🔄 Re-coding and Bundling Analysis</h3>')
-        output.append("")
-        output.append("**Device codes with local descriptions and LLM-generated recoding analysis:**")
+    # Device codes with no changes since 2024
+    if data.get('no_change_results'):
+        output.append('<h3 class="section-heading">📋 Device Codes Without Recent Changes</h3>')
         output.append("")
         
-        for item in sorted(data['internal_llm_recoding_result'], key=lambda x: x.get('hcpcs_code', '')):
-            output.append(f'<h4 class="subsection-heading">HCPCS {item.get("hcpcs_code", "Unknown")}</h4>')
-            output.append("")
-            
-            # Description with source coloring from description_source field
-            desc_source = item.get('description_source', 'internal_kb')
-            desc_text = format_text_with_source(item.get('description', 'No description'), desc_source)
-            output.append(f"**Description:** {desc_text}")
-            output.append("")
-            
-            # Recoding possibilities from LLM
-            llm_recoding = item.get('llm_recoding', {})
-            recoding_text = llm_recoding.get('recoding_possibilities', 'No recoding analysis available')
-            source = llm_recoding.get('source', 'llm')
-            
-            output.append("**Potential Re-coding/Bundling Scenarios:**")
-            output.append("")
-            
-            # For multi-line text, preserve formatting and apply color
-            # Replace newlines with <br> and wrap in colored div
-            color = "#2e7d32" if source == "internal_kb" else "#1f1f1f"
-            formatted_text = recoding_text.replace('\n', '<br>')
-            output.append(f'<div style="color: {color}; white-space: pre-wrap;">{formatted_text}</div>')
-            output.append("")
-            output.append("")
-            output.append("---")  # Horizontal line separator
-            output.append("")
+        for item in sorted(data['no_change_results'], key=lambda x: x.get('hcpcs_code', '')):
+            status = item.get('status', 'No changes to device code descriptions since 2024.')
+            output.append(f"**HCPCS {item.get('hcpcs_code', 'Unknown')}:** {status}")
             output.append("")
         
         output.append("---")
         output.append("")
     
-    # Full LLM analysis for codes without local descriptions
-    if data.get('external_full_llm_result') and data['external_full_llm_result']:
-        output.append('<h3 class="section-heading">🔬 Additional Device Code Analysis</h3>')
-        output.append("")
-        output.append("**Device codes not found in local database (full LLM-generated analysis):**")
-        output.append("")
-        
-        external_results = data['external_full_llm_result']
-        if isinstance(external_results, list):
-            for item in sorted(external_results, key=lambda x: x.get('hcpcs_code', '')):
-                # Handle parse errors
-                if 'parse_error' in item:
-                    output.append(f"**⚠️ Parse Error:** {item.get('parse_error', 'Unknown error')}")
-                    output.append("")
-                    output.append("**Raw Result:**")
-                    output.append("")
-                    output.append(item.get('raw_result', 'No result'))
-                    output.append("")
-                    output.append("")  # Extra empty line
-                    continue
-                
-                output.append(f'<h4 class="subsection-heading">HCPCS {item.get("hcpcs_code", "Unknown")}</h4>')
-                output.append("")
-                
-                # Description from LLM
-                desc_text = format_text_with_source(item.get('description', 'No description'), 'llm')
-                output.append(f"**Description:** {desc_text}")
-                output.append("")
-                
-                # Recoding possibilities from LLM
-                llm_recoding = item.get('llm_recoding', {})
-                recoding_text = llm_recoding.get('recoding_possibilities', 'No recoding analysis available')
-                
-                output.append("**Potential Re-coding/Bundling Scenarios:**")
-                output.append("")
-                
-                # For multi-line text, preserve formatting and apply color (black for LLM)
-                formatted_text = recoding_text.replace('\n', '<br>')
-                output.append(f'<div style="color: #1f1f1f; white-space: pre-wrap;">{formatted_text}</div>')
-                output.append("")
-                output.append("")
-                output.append("---")  # Horizontal line separator
-                output.append("")
-                output.append("")
-        else:
-            # Fallback for old format (string)
-            output.append(str(external_results))
-            output.append("")
-    
-    # If no device codes found at all - check all four result categories
+    # If no device codes found at all - check all result categories
     # Note: Empty lists [] evaluate to False, so we need to check explicitly
     has_any_results = bool(
         (data.get('device_codes_with_desc') and len(data.get('device_codes_with_desc', [])) > 0) or 
         (data.get('internal_recoding_result') and len(data.get('internal_recoding_result', [])) > 0) or 
-        (data.get('internal_llm_recoding_result') and len(data.get('internal_llm_recoding_result', [])) > 0) or 
-        (data.get('external_full_llm_result') and len(data.get('external_full_llm_result', [])) > 0)
+        (data.get('no_change_results') and len(data.get('no_change_results', [])) > 0)
     )
     
     if not has_any_results:
