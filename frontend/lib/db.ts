@@ -50,9 +50,9 @@ export type ClientSessionMessages =
 
 export type ClientSessionMessage = ClientSessionMessages[number];
 
-export const getChatSession = async (oktaId: string, sessionId: string, limit?: number) => {
+export const getChatSession = async (uid: string, sessionId: string, limit?: number) => {
   const session = await db.query.sessions.findFirst({
-    where: and(eq(schemas.sessions.id, sessionId), eq(schemas.sessions.type, "chat")),
+    where: and(eq(schemas.sessions.id, sessionId)),
     with: {
       sections: {
         with: {
@@ -75,7 +75,7 @@ export const getChatSession = async (oktaId: string, sessionId: string, limit?: 
     },
   });
 
-  if (!session || session.user.oktaId !== oktaId) return null;
+  if (!session || session.user.id !== uid) return null;
   return session;
 };
 
@@ -122,7 +122,7 @@ export const addToChatSessionMessage = async (
         sections: true,
       },
     });
-    if (!session || session.type !== "chat") throw new Error("Chat does not exist");
+    if (!session) throw new Error("Chat does not exist");
     if (session.user.id !== uid) throw new Error("Unauthorized");
 
     const targetSection =

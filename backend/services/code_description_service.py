@@ -194,7 +194,7 @@ def load_cached_results(target_cpt):
             "neighbouring_codes": cached_data.get("neighbouring_codes", []),
             "internal_recoding_result": cached_data.get("internal_recoding_result", []),
             "internal_llm_recoding_result": cached_data.get("internal_llm_recoding_result", []),
-            "external_full_llm_result": cached_data.get("external_full_llm_result", "")
+            "external_full_llm_result": cached_data.get("external_full_llm_result", [])
         }
         
         print(f"✅ Loaded cached results from {output_path}")
@@ -322,7 +322,10 @@ def analyze_code_descriptions(target_cpt, model="gpt-4.1-mini", use_cache=True):
             "update_time": dt_str,
             "neighbouring_codes": neighbouring_codes_with_desc,
             "internal_recoding_result": kb_results,
-            "no_change_results": no_change_results
+            "no_change_results": no_change_results,
+            # Reserved fields for extended recoding analyses to satisfy response schema
+            "internal_llm_recoding_result": internal_llm_recoding_results,
+            "external_full_llm_result": external_full_llm_result
         }
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(result_obj, f, ensure_ascii=False, indent=2)
@@ -331,7 +334,9 @@ def analyze_code_descriptions(target_cpt, model="gpt-4.1-mini", use_cache=True):
         return {
             "neighbouring_codes": neighbouring_codes_with_desc,  
             "internal_recoding_result": kb_results,
-            "no_change_results": no_change_results
+            "no_change_results": no_change_results,
+            "internal_llm_recoding_result": internal_llm_recoding_results,
+            "external_full_llm_result": external_full_llm_result
         }
     except Exception as e:
         print(f"❌ Error: {str(e)}")

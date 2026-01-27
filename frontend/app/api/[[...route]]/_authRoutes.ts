@@ -61,7 +61,8 @@ app.post("/chat", async (c) => {
   try {
     const data = await c.req.json();
     const { sessionId } = data as ChatBodyRequest;
-    const chatSession = await getChatSession(c.var.user.oktaId, sessionId);
+    console.log(`Received chat request for sessionId: ${sessionId}`);
+    const chatSession = await getChatSession(c.var.user.id, sessionId);
     if (!chatSession) {
       return jsonError(c, 404, "Chat session not found", "not_found");
     }

@@ -17,10 +17,14 @@ import { TextSelection } from "@/hooks/useTextHighlighting";
 
 export type AssistantRendererProps = {
   message: ClientSessionMessage;
-  defaultRenderer: () => ReactNode;
 };
 
 export type AssistantRenderer = FC<AssistantRendererProps>;
+
+type AssistantSelectionWrapperProps = {
+  message: ClientSessionMessage;
+  children: ReactNode;
+};
 
 type ChatDisplayProps = {
   assistantRenderers?: AssistantRenderer[];
@@ -60,10 +64,9 @@ export const ChatDisplay: FC<ChatDisplayProps> = ({ assistantRenderers }) => {
       return <DefaultAssistantRender data={message} />;
     }
     return (
-      <Renderer
-        message={message}
-        defaultRenderer={() => <DefaultAssistantRender data={message} />}
-      />
+      <AssistantSelectionWrapper message={message}>
+        <Renderer message={message} />
+      </AssistantSelectionWrapper>
     );
   };
 
@@ -77,8 +80,10 @@ export const ChatDisplay: FC<ChatDisplayProps> = ({ assistantRenderers }) => {
             <div key={message.id} ref={isLastUserMessage ? lastUserMessageRef : null}>
               <UserMessage data={message} />
             </div>
+          ) : index === 0 ? (
+            renderAssistant(message)
           ) : (
-            <div key={message.id}>{renderAssistant(message)}</div>
+            <DefaultAssistantRender data={message} />
           );
         })}
         {loading && aiResponse === "" && (
@@ -89,22 +94,24 @@ export const ChatDisplay: FC<ChatDisplayProps> = ({ assistantRenderers }) => {
           </div>
         )}
         {aiResponse && (
-          <div key="live-ai-response">
-            {renderAssistant({
-              content: aiResponse,
-              createdAt: new Date(),
-              documents: null,
-              id: crypto.randomUUID(),
-              modelUsed: "",
-              role: "assistant",
-              chatId: "",
-              feedback: null,
-              feedbackId: null,
-            })}
+          <div>
+            <DefaultAssistantRender
+              data={{
+                content: aiResponse,
+                createdAt: new Date(),
+                documents: null,
+                id: crypto.randomUUID(),
+                modelUsed: "",
+                role: "assistant",
+                chatId: "",
+                feedback: null,
+                feedbackId: null,
+              }}
+            />
           </div>
         )}
       </div>
-      <div className="pb-[100svh]" />
+      <div className="pb-[90svh]" />
 
       <TextSelectionMenu
         isOpen={isSelectionMenuOpen}
@@ -127,44 +134,29 @@ const Icon = ({ children }: { children: ReactNode }) => {
 };
 
 const DefaultAssistantRender = ({ data }: { data: ClientSessionMessage }) => {
-  const { handleTextSelection } = useTextHighlightingContext();
-  const { sessionId } = useParams<{ sessionId: string }>();
-  const { currentSection } = useChatContext();
   const documents = data.documents;
 
-  const handleMouseUp = (event: React.MouseEvent) => {
-    if (!sessionId) return;
-    const sectionNumeric = Number(currentSection);
-    const sectionId = Number.isFinite(sectionNumeric) ? sectionNumeric : undefined;
-    handleTextSelection(event, data.content, data.id, sessionId, sectionId);
-  };
   return (
-    <div className="flex gap-2 mt-4 w-full">
-      <div className="flex flex-col w-full">
-        <div
-          className="px-0 rounded-sm select-text cursor-text"
-          onMouseUp={handleMouseUp}
-          data-message-id={data.id}
-        >
-          <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-            {data.content}
-          </Markdown>
-        </div>
-        <ChatFeedback feedback={data.feedback} messageId={data.id} />
-        {documents && (
-          <div>
-            <span className="mb-2 flex gap-2 items-center text-sm text-muted-foreground">
-              <FileIcon className="size-4" /> 2 sources
-            </span>
-            <div className="flex gap-2">
-              {documents.map((doc) => (
-                <DocumentLink key={doc.title} data={doc} />
-              ))}
-            </div>
-          </div>
-        )}
+    <AssistantSelectionWrapper message={data}>
+      <div className="px-0 rounded-sm select-text cursor-text">
+        <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+          {data.content}
+        </Markdown>
       </div>
-    </div>
+      <ChatFeedback feedback={data.feedback} messageId={data.id} />
+      {documents && (
+        <div>
+          <span className="mb-2 flex gap-2 items-center text-sm text-muted-foreground">
+            <FileIcon className="size-4" /> 2 sources
+          </span>
+          <div className="flex gap-2">
+            {documents.map((doc) => (
+              <DocumentLink key={doc.title} data={doc} />
+            ))}
+          </div>
+        </div>
+      )}
+    </AssistantSelectionWrapper>
   );
 };
 
@@ -204,7 +196,7 @@ export const SectionTabDisplay: FC<SectionSelectorProps> = ({ children, assistan
 
   return (
     <div className="flex flex-1 flex-col size-full overflow-y-auto">
-      <div className="w-full gap-2 grid grid-cols-7 py-4 max-w-5xl mx-auto">
+      <div className="w-full gap-2 grid grid-cols-6 py-4 max-w-5xl mx-auto">
         {chatData.map((data) => (
           <div
             key={data.sectionId}
@@ -218,6 +210,32 @@ export const SectionTabDisplay: FC<SectionSelectorProps> = ({ children, assistan
         ))}
       </div>
       {renderedChildren}
+    </div>
+  );
+};
+
+export const AssistantSelectionWrapper: FC<AssistantSelectionWrapperProps> = ({
+  message,
+  children,
+}) => {
+  const { handleTextSelection } = useTextHighlightingContext();
+  const { sessionId } = useParams<{ sessionId: string }>();
+  const { currentSection } = useChatContext();
+
+  const sectionNumeric = Number(currentSection);
+  const sectionId = Number.isFinite(sectionNumeric) ? sectionNumeric : undefined;
+
+  return (
+    <div className="flex gap-2 mt-4 w-full">
+      <div
+        data-message-id={message.id}
+        className="flex flex-col w-full"
+        onMouseUp={(event) => {
+          handleTextSelection(event, message.content, message.id, sessionId, sectionId);
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 };

@@ -2,8 +2,9 @@
 
 import { AssistantRenderer } from "@/components/chatDisplay";
 import type { components } from "@/lib/api-types";
-import { LinkIcon } from "lucide-react";
+import { LinkIcon, RefreshCcw, Search } from "lucide-react";
 import { FC, ReactNode, useMemo } from "react";
+import { LEGEND, LegendCard } from "./legendCard";
 
 type Section1Data = components["schemas"]["Section1Data"];
 type InternalLlmRecodingResult = components["schemas"]["InternalLlmRecodingResult"];
@@ -27,12 +28,6 @@ const isSection1Data = (value: unknown): value is Section1Data => {
 };
 
 const parseSection1Content = (content: string): Section1Data | null => {
-  const stripCodeFence = (raw: string) => {
-    const fenceMatch = raw.match(/^```[a-zA-Z]*\n([\s\S]*?)\n```$/);
-    if (fenceMatch) return fenceMatch[1];
-    return raw;
-  };
-
   const tryParse = (raw: unknown, allowNested = true): Section1Data | null => {
     if (isSection1Data(raw)) return raw;
     if (!raw || typeof raw !== "object") return null;
@@ -56,35 +51,19 @@ const parseSection1Content = (content: string): Section1Data | null => {
     return null;
   };
 
-  const attemptJson = (raw: string, allowNested = true): Section1Data | null => {
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      const result = tryParse(parsed, allowNested);
-      if (result) return result;
+  try {
+    const parsed = JSON.parse(content) as unknown;
+    const result = tryParse(parsed);
+    if (result) return result;
 
-      if (typeof parsed === "string") {
-        return attemptJson(parsed, false);
-      }
-    } catch (error) {
-      return null;
+    if (typeof parsed === "string") {
+      return tryParse(JSON.parse(parsed), false);
     }
+  } catch (error) {
+    console.warn("Failed to parse section 1 response", error);
     return null;
-  };
-
-  const normalized = stripCodeFence(content.trim());
-
-  const direct = attemptJson(normalized);
-  if (direct) return direct;
-
-  const firstBrace = normalized.indexOf("{");
-  const lastBrace = normalized.lastIndexOf("}");
-  if (firstBrace >= 0 && lastBrace > firstBrace) {
-    const slice = normalized.slice(firstBrace, lastBrace + 1);
-    const sliced = attemptJson(slice);
-    if (sliced) return sliced;
   }
 
-  console.warn("Failed to parse section 1 response", content);
   return null;
 };
 
@@ -116,8 +95,8 @@ const SubsectionHeading: FC<{ id: string; children: ReactNode }> = ({ id, childr
 
 const CodeLine: FC<{ code: NeighbouringCode }> = ({ code }) => (
   <p className="leading-relaxed text-base text-foreground">
-    <strong>{`CPT ${code.cpt_code}`}</strong>:
-    <span className="ml-1 text-primary" title={`Source: ${code.source}`}>
+    <strong className={`text-${LEGEND[code.source].color}`}>{`CPT ${code.cpt_code}`}</strong>:
+    <span className="ml-1 text-foreground" title={`Source: ${code.source}`}>
       {code.description}
     </span>
   </p>
@@ -125,12 +104,12 @@ const CodeLine: FC<{ code: NeighbouringCode }> = ({ code }) => (
 
 const RecodingCard: FC<{ entry: InternalLlmRecodingResult }> = ({ entry }) => (
   <div
-    className="border border-border rounded-lg p-4 shadow-sm bg-card"
+    className="border border-muted rounded-lg p-4 shadow-sm bg-white"
     id={`cpt-${entry.cpt_code}`}
   >
     <SubsectionHeading id={`cpt-${entry.cpt_code}`}>CPT {entry.cpt_code}</SubsectionHeading>
     <p className="text-sm text-foreground">
-      <strong>Description:</strong> <span className="text-primary">{entry.description}</span>
+      <strong>Description:</strong> <span>{entry.description}</span>
     </p>
     <p className="mt-3 font-semibold text-foreground">Potential Re-coding/Bundling Scenarios:</p>
     <div className="mt-1 whitespace-pre-wrap text-foreground text-sm leading-6">
@@ -165,9 +144,13 @@ const SectionOneContent: FC<{ data: Section1Data }> = ({ data }) => {
   );
 
   return (
-    <div className="px-0 rounded-sm select-text cursor-text">
+    <div className="select-text cursor-text">
+      <LegendCard />
       <SectionHeading id="neighboring-cpt-codes-with-target-cpt-code">
-        Neighboring CPT Codes with Target CPT Code
+        <span className="flex items-center gap-2">
+          <Search className="size-5 text-muted-foreground" aria-hidden />
+          <span>Neighboring CPT Codes with Target CPT Code</span>
+        </span>
       </SectionHeading>
       <p className="font-semibold text-foreground">
         Identified {neighbouringCodes.length} related codes (in ascending order):
@@ -178,10 +161,13 @@ const SectionOneContent: FC<{ data: Section1Data }> = ({ data }) => {
         ))}
       </div>
 
-      <hr className="my-6 border-border" />
+      <hr className="my-6 border-muted" />
 
       <SectionHeading id="re-coding-and-bundling-analysis">
-        Re-coding and Bundling Analysis
+        <span className="flex items-center gap-2">
+          <RefreshCcw className="size-5 text-muted-foreground" aria-hidden />
+          <span>Re-coding and Bundling Analysis</span>
+        </span>
       </SectionHeading>
       <p className="font-semibold text-foreground">
         Codes with local descriptions and LLM-generated recoding analysis:
@@ -200,18 +186,11 @@ const SectionOneContent: FC<{ data: Section1Data }> = ({ data }) => {
   );
 };
 
-const SectionOneRenderer: AssistantRenderer = ({ message, defaultRenderer }) => {
+const SectionOneRenderer: AssistantRenderer = ({ message }) => {
   const parsedData = useMemo(() => parseSection1Content(message.content), [message.content]);
+  if (!parsedData) return <>{message.content}</>;
 
-  if (!parsedData) return <>{defaultRenderer()}</>;
-
-  return (
-    <div className="flex gap-2 mt-4 w-full" data-message-id={message.id}>
-      <div className="flex flex-col w-full">
-        <SectionOneContent data={parsedData} />
-      </div>
-    </div>
-  );
+  return <SectionOneContent data={parsedData} />;
 };
 
 export const sectionRenderers: AssistantRenderer[] = [SectionOneRenderer];

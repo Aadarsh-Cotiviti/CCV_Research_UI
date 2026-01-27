@@ -94,8 +94,6 @@ async def run_all(req: RunAllRequest):
         req.cpt,
         req.context or "",
         req.model,
-        req.sections_to_run,
-        req.use_cache,
     )
     return result
 
