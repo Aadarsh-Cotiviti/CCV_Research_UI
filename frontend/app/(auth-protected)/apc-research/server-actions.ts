@@ -17,7 +17,7 @@ export const createResearch = async (
     context: contextDetails,
     cpt: targetCpt,
     model: model,
-    use_cache: false,
+    use_cache: true,
   });
   console.log(JSON.stringify(response));
   if (response.error) {
