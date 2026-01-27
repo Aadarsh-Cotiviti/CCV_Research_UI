@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, ValidationError
 from .utils import compute_audit_window
 from services.common import get_or_generate_cpt_description
 
-def retrieve_knowledge(cpt_code, cpt_change_df=Path('output/preprocessed_cpt_change_tracking.csv')):
+def retrieve_knowledge(cpt_code, cpt_change_df=Path('data/preprocessed_cpt_change_tracking.csv')):
     """
     Retrieve CPT code changes (new or changed codes) for the past 3 years from local knowledge base.
     
@@ -29,8 +29,14 @@ def retrieve_knowledge(cpt_code, cpt_change_df=Path('output/preprocessed_cpt_cha
         # Load preprocessed CPT change tracking data
         cpt_df = pd.read_csv(cpt_change_df, parse_dates=['EffectiveDt', 'EndDt'])
         
+        # Convert cpt_code to int for comparison (CSV stores as int64)
+        try:
+            cpt_code_int = int(cpt_code)
+        except (ValueError, TypeError):
+            return None
+        
         # Filter for the specific CPT code
-        code_records = cpt_df[cpt_df['CPTCd'] == cpt_code]
+        code_records = cpt_df[cpt_df['CPTCd'] == cpt_code_int]
         
         # If no records found, return None
         if len(code_records) == 0:
@@ -285,104 +291,25 @@ def analyze_code_descriptions(target_cpt, model="gpt-4.1-mini", use_cache=True):
                 print(f"❌ Not in KB: {code}")
 
         print(f"\n📊 Knowledge base results: {len(kb_results)} codes found")
-        print(f"📊 Codes requiring LLM analysis: {len(codes_without_kb)}")
+        print(f"📊 Codes without changes since 2024: {len(codes_without_kb)}")
 
-        # Step 3: analysis for codes not in the change tracking KB
-        # 3.1: codes have local code-desc mapping, but no change tracking info. 
-    
-        internal_llm_recoding_results = []
-        local_desc_results = []
-        local_desc_full_info = {}  # Store full desc info including source
-        codes_for_llm = []
-        for code in codes_without_kb:
-            # Only use local description (no LLM fallback) for internal_llm_recoding
-            desc = get_or_generate_cpt_description(code, model=model, use_llm_fallback=False)
-            if desc and desc["description"]:  # Check if local description exists
-                # Store simple format for LLM prompt
-                local_desc_results.append({
+        # Step 3: For codes not in the change tracking KB, return standardized message
+        no_change_results = []
+        if codes_without_kb:
+            no_change_message = "No changes to CPT code descriptions since 2024."
+            for code in codes_without_kb:
+                desc = get_or_generate_cpt_description(code, model=model, use_llm_fallback=False)
+                no_change_results.append({
                     "cpt_code": code,
-                    "description": desc["description"]
+                    "description": desc["description"] if desc and desc["description"] else "Description not available",
+                    "description_source": desc["source"] if desc else "unknown",
+                    "status": no_change_message
                 })
-                # Store full info including source for later use
-                local_desc_full_info[code] = desc
-                print(f"[Local Description] CPT Code: {code} - {desc['description'][:80]}... [source: {desc['source']}]")
-            else:
-                # No local description, needs full LLM analysis
-                codes_for_llm.append(code)
-                print(f"[No Local Description] CPT Code: {code} - will use full LLM analysis")
-
-        # Use LLM to complete potential recoding possibilities only.
-        if local_desc_results:
-            llm_prompt_local = build_llm_completion_prompt_for_local_desc(local_desc_results)
-            messages = [
-                {"role": "system", "content": "You are an expert medical coding analyst specializing in APC research."},
-                {"role": "user", "content": llm_prompt_local}
-            ]
-            local_llm_result = query_llm(messages, model=model)
-            print(local_llm_result)
-            # Parse LLM JSON response
-            from pydantic import BaseModel, ValidationError, TypeAdapter
-            class RecodingItem(BaseModel):
-                cpt_code: str
-                recoding_possibilities: str
-            try:
-                recoding_items = TypeAdapter(list[RecodingItem]).validate_python(json.loads(local_llm_result))
-                for item in recoding_items:
-                    # Get full desc info including source
-                    full_desc = local_desc_full_info.get(item.cpt_code)
-                    if full_desc:
-                        internal_llm_recoding_results.append({
-                            "cpt_code": item.cpt_code,
-                            "description": full_desc["description"],
-                            "description_source": full_desc["source"],  # Store source separately
-                            "llm_recoding": {
-                                "recoding_possibilities": item.recoding_possibilities,
-                                "source": "llm"
-                            }
-                        })
-                print(f"✅ Parsed {len(internal_llm_recoding_results)} internal LLM recoding results")
-            except (ValidationError, json.JSONDecodeError) as e:
-                print(f"⚠️ [Internal LLM JSON parse error]: {e}")
-
-        # 3.2: codes have no local description and no change tracking info, need full LLM analysis
+                print(f"  {code}: {no_change_message}")
+        
+        # Kept for backwards compatibility (empty lists)
+        internal_llm_recoding_results = []
         external_full_llm_result = []
-        if codes_for_llm:
-            print(f"\n===== LLM Analysis for Codes Not in KB and No Local Description =====\nCodes for LLM: {codes_for_llm}")
-            llm_prompt = build_llm_analysis_prompt(codes_for_llm)
-            if not llm_prompt:
-                print("[LLM prompt is None, skipping LLM query for codes with no local desc]")
-            else:
-                print(f"[LLM Prompt for external_full_llm_result]:\n{llm_prompt}")
-                messages = [
-                    {"role": "system", "content": "You are an expert medical coding analyst specializing in APC research."},
-                    {"role": "user", "content": llm_prompt}
-                ]
-                llm_result = query_llm(messages, model=model)
-                print(f"[LLM external_full_llm_result]:\n{llm_result}")
-                
-                # Parse LLM JSON response with pydantic
-                from pydantic import BaseModel, TypeAdapter
-                class ExternalAnalysisItem(BaseModel):
-                    cpt_code: str
-                    description: str
-                    recoding_possibilities: str
-                
-                try:
-                    external_items = TypeAdapter(list[ExternalAnalysisItem]).validate_python(json.loads(llm_result))
-                    for item in external_items:
-                        external_full_llm_result.append({
-                            "cpt_code": item.cpt_code,
-                            "description": item.description,
-                            "llm_recoding": {
-                                "recoding_possibilities": item.recoding_possibilities,
-                                "source": "llm"
-                            }
-                        })
-                    print(f"✅ Parsed {len(external_full_llm_result)} external LLM results")
-                except (ValidationError, json.JSONDecodeError) as e:
-                    print(f"⚠️ [External LLM JSON parse error]: {e}")
-                    # Fallback: store raw result
-                    external_full_llm_result = [{"raw_result": llm_result, "parse_error": str(e)}]
 
         # Save findings to JSON file
         output_dir = f"output/services_findings/{target_cpt}"
@@ -391,12 +318,11 @@ def analyze_code_descriptions(target_cpt, model="gpt-4.1-mini", use_cache=True):
         file_name = "section_1_results.json"
         output_path = os.path.join(output_dir, file_name)
         result_obj = {
-            "service": "section 1 - code description with desc",
+            "service": "section 1 - code description analysis",
             "update_time": dt_str,
             "neighbouring_codes": neighbouring_codes_with_desc,
             "internal_recoding_result": kb_results,
-            "internal_llm_recoding_result": internal_llm_recoding_results,
-            "external_full_llm_result": external_full_llm_result
+            "no_change_results": no_change_results
         }
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(result_obj, f, ensure_ascii=False, indent=2)
@@ -405,8 +331,7 @@ def analyze_code_descriptions(target_cpt, model="gpt-4.1-mini", use_cache=True):
         return {
             "neighbouring_codes": neighbouring_codes_with_desc,  
             "internal_recoding_result": kb_results,
-            "internal_llm_recoding_result": internal_llm_recoding_results,
-            "external_full_llm_result": external_full_llm_result
+            "no_change_results": no_change_results
         }
     except Exception as e:
         print(f"❌ Error: {str(e)}")

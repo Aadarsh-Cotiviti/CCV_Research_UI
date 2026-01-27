@@ -83,40 +83,90 @@ def format_cpt_code_section(cpt_code, code_data, ncci_data, payment_data):
         output.append("**🔍 NCCI Compliance:** No NCCI edits found")
         output.append("")
     
-    # 3. Payment History (from Section 3)
-    if payment_data and len(payment_data) > 0:
-        output.append("**💰 Payment Rate History:**")
-        output.append("")
-        
-        # Create payment table
-        df = pd.DataFrame(payment_data)
-        # Filter for this specific code
-        code_df = df[df['HCPCS Code'] == cpt_code]
-        
-        if len(code_df) > 0:
-            # Format as table
-            payment_table = []
-            for _, row in code_df.iterrows():
-                year = row.get('Year', 'N/A')
-                rate = row.get('Payment Rate', 'N/A')
-                apc = row.get('APC', 'N/A')
-                # Convert APC to int if it's a number
-                if apc != 'N/A':
-                    try:
-                        apc = int(float(apc))
-                    except (ValueError, TypeError):
-                        pass
-                payment_table.append(f"  - **{year}**: ${rate} (APC {apc})")
-            
-            output.extend(payment_table)
-            output.append("")
-        else:
-            output.append("  - No payment history available for this code")
-            output.append("")
-    else:
-        output.append("**💰 Payment Rate History:** No payment data available")
-        output.append("")
+    # 3. Payment History (from Section 3) - APC, ASC, and PNPP
+    output.append("**💰 Payment Rate History:**")
+    output.append("")
     
+    has_payment_data = False
+    
+    # Check if payment_data is a dict (new format) or handle gracefully
+    if not payment_data or not isinstance(payment_data, dict):
+        output.append("  - No payment data available")
+        output.append("")
+        output.append("---")
+        output.append("")
+        return "\n".join(output)
+    
+    # Check APC payment data
+    if payment_data.get('apc') and payment_data['apc'].get('has_data'):
+        apc_data = payment_data['apc']['data']
+        if apc_data and len(apc_data) > 0:
+            df_apc = pd.DataFrame(apc_data)
+            if 'HCPCS Code' in df_apc.columns:
+                code_df = df_apc[df_apc['HCPCS Code'] == cpt_code]
+                
+                if len(code_df) > 0:
+                    years = sorted(code_df['Year'].unique())
+                    latest_year = years[-1] if years else 'N/A'
+                    latest_row = code_df[code_df['Year'] == latest_year].iloc[0]
+                    latest_rate = latest_row.get('Payment Rate', 'N/A')
+                    latest_apc = latest_row.get('APC Code', 'N/A')  # Changed from 'APC' to 'APC Code'
+                    if latest_apc != 'N/A':
+                        try:
+                            latest_apc = int(float(latest_apc))
+                        except (ValueError, TypeError):
+                            pass
+                    output.append(f"  - **APC**: {len(years)} years of data available (Latest: {latest_year}, \${latest_rate}, APC {latest_apc})")
+                    has_payment_data = True
+    
+    # Check ASC payment data
+    if payment_data.get('asc') and payment_data['asc'].get('has_data'):
+        asc_data = payment_data['asc']['data']
+        if asc_data and len(asc_data) > 0:
+            df_asc = pd.DataFrame(asc_data)
+            if 'HCPCS Code' in df_asc.columns:
+                code_df = df_asc[df_asc['HCPCS Code'] == cpt_code]
+                
+                if len(code_df) > 0:
+                    years = sorted(code_df['Year'].unique())
+                    latest_year = years[-1] if years else 'N/A'
+                    latest_row = code_df[code_df['Year'] == latest_year].iloc[0]
+                    latest_rate = latest_row.get('Payment Rate', 'N/A')
+                    output.append(f"  - **ASC**: {len(years)} years of data available (Latest: {latest_year}, \${latest_rate})")
+                    has_payment_data = True
+    
+    # Check PNPP payment data
+    if payment_data.get('pnpp') and payment_data['pnpp'].get('has_data'):
+        pnpp_data = payment_data['pnpp']['data']
+        if pnpp_data and len(pnpp_data) > 0:
+            df_pnpp = pd.DataFrame(pnpp_data)
+            if 'HCPCS' in df_pnpp.columns:
+                code_df = df_pnpp[df_pnpp['HCPCS'] == cpt_code]
+                
+                if len(code_df) > 0:
+                    years = sorted(code_df['Year'].unique())
+                    latest_year = years[-1] if years else 'N/A'
+                    latest_row = code_df[code_df['Year'] == latest_year].iloc[0]
+                    non_facility_rate = latest_row.get('Non-Facility Payment Rate', 'N/A')
+                    facility_rate = latest_row.get('Facility Payment Rate', 'N/A')
+                    # Format rates to 2 decimal places
+                    if non_facility_rate != 'N/A':
+                        try:
+                            non_facility_rate = f"{float(non_facility_rate):.2f}"
+                        except (ValueError, TypeError):
+                            pass
+                    if facility_rate != 'N/A':
+                        try:
+                            facility_rate = f"{float(facility_rate):.2f}"
+                        except (ValueError, TypeError):
+                            pass
+                    output.append(f"  - **PNPP**: {len(years)} years of data available (Latest: {latest_year}, Non-Facility: \${non_facility_rate}, Facility: \${facility_rate})")
+                    has_payment_data = True
+    
+    if not has_payment_data:
+        output.append("  - No payment data available")
+    
+    output.append("")
     output.append("---")
     output.append("")
     
@@ -183,36 +233,28 @@ def render_section(cpt_code, model, session_id, idx=0):
         st.markdown("This section consolidates key findings from all previous sections (1-6)")
     
     with col2:
-        if st.button("🔄 Generate Assessment", key=f"generate_final_assessment_{idx}", type="primary"):
-            st.session_state[f'final_assessment_trigger_{idx}'] = True
+        generate_btn = st.button("🔄 Generate Assessment", key=f"generate_final_assessment_{idx}", type="primary")
     
-    # Check if we should run the analysis
-    should_run = st.session_state.get(f'final_assessment_trigger_{idx}', False)
-    
-    if should_run:
-        # Clear trigger
-        st.session_state[f'final_assessment_trigger_{idx}'] = False
-        
+    # Handle button click
+    if generate_btn:
         with st.spinner("🔄 Consolidating results from all sections..."):
             try:
                 # Generate final assessment
-                assessment = generate_final_assessment(target_cpt=cpt_code, use_cache=True)
+                assessment = generate_final_assessment(target_cpt=cpt_code, use_cache=False)
                 
                 if assessment:
-                    st.success("✅ Final assessment generated successfully!")
-                    
                     # Store in session state for display
-                    st.session_state[f'final_assessment_data_{idx}'] = assessment
+                    st.session_state[assessment_key] = assessment
+                    st.success("✅ Final assessment generated successfully!")
+                    st.rerun()
                 else:
                     st.error("❌ Failed to generate final assessment. Please ensure all sections 1-6 have been completed.")
-                    return
                     
             except Exception as e:
                 st.error(f"❌ Error generating final assessment: {str(e)}")
-                return
     
     # Display results if available
-    assessment_data = st.session_state.get(f'final_assessment_data_{idx}')
+    assessment_data = st.session_state.get(assessment_key)
     
     if assessment_data:
         # Extract data
@@ -239,13 +281,13 @@ def render_section(cpt_code, model, session_id, idx=0):
             for code in all_cpt_codes:
                 code_data = cpt_descriptions.get(code)
                 ncci_data = ncci_results.get(code)
-                payment_data = payment_history.get('data', [])
+                # Pass entire payment_history dict with apc, asc, pnpp keys
                 
                 formatted_section = format_cpt_code_section(
                     code, 
                     code_data, 
                     ncci_data, 
-                    payment_data
+                    payment_history
                 )
                 
                 st.markdown(formatted_section, unsafe_allow_html=True)

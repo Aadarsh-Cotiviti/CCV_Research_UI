@@ -70,11 +70,11 @@ def render_ptp_tables(ptp_tables_by_cpt, target_cpt, ncci_manual_by_cpt=None, nc
                     def style_green(val):
                         return 'color: #2e7d32'
                     
-                    styled_df = df_display.style.applymap(style_green)
+                    styled_df = df_display.style.map(style_green)
                     
                     st.dataframe(
                         styled_df,
-                        use_container_width=True,
+                        width='stretch',
                         hide_index=True,
                         height=400,
                         column_config={
@@ -108,11 +108,11 @@ def render_ptp_tables(ptp_tables_by_cpt, target_cpt, ncci_manual_by_cpt=None, nc
                     def style_green(val):
                         return 'color: #2e7d32'
                     
-                    styled_df = df_display.style.applymap(style_green)
+                    styled_df = df_display.style.map(style_green)
                     
                     st.dataframe(
                         styled_df,
-                        use_container_width=True,
+                        width='stretch',
                         hide_index=True,
                         height=400,
                         column_config={
@@ -140,9 +140,6 @@ def render_ptp_tables(ptp_tables_by_cpt, target_cpt, ncci_manual_by_cpt=None, nc
             source = ncci_manual_content.get("source", "unknown")
             
             if analysis_text:
-                # Get color based on source
-                color = get_source_color(source)
-                
                 # Remove references section completely from LLM output
                 # We'll build our own unified references section from chunk_details
                 import re as ref_regex
@@ -156,88 +153,38 @@ def render_ptp_tables(ptp_tables_by_cpt, target_cpt, ncci_manual_by_cpt=None, nc
                 # This ensures we always show available chunks regardless of LLM format
                 chunk_matches = list(ncci_chunk_details.keys()) if ncci_chunk_details else []
                 
-                # Use cleaned main content only
-                full_content = main_content
-                
-                # Convert markdown to HTML-like format while preserving structure
-                # We'll manually handle common markdown patterns
-                import html
+                # Remove the first title line (e.g., "# 🎯 NCCI Compliance Analysis for CPT xxxxx")
+                # and any Markdown formatting markers
                 import re as regex
                 
-                # First, remove all ** bold markers from the content
-                full_content = regex.sub(r'\*\*', '', full_content)
+                # Remove all Markdown headers (##, ###, etc.) and bold markers (**)
+                main_content = regex.sub(r'\*\*', '', main_content)
+                main_content = regex.sub(r'^#{1,6}\s+', '', main_content, flags=regex.MULTILINE)
                 
-                # Remove the first title line (e.g., "# 🎯 NCCI Compliance Analysis for CPT xxxxx")
-                lines = full_content.split('\n')
-                if lines and lines[0].strip().startswith('#') and 'NCCI Compliance Analysis' in lines[0]:
+                lines = main_content.split('\n')
+                if lines and 'NCCI Compliance Analysis' in lines[0]:
                     lines = lines[1:]  # Skip the first title line
+                    main_content = '\n'.join(lines).strip()
                 
-                html_lines = []
-                in_list = False
-                
-                for line in lines:
-                    if not line.strip():
-                        if in_list:
-                            html_lines.append('</ul>')
-                            in_list = False
-                        html_lines.append('<br>')
-                        continue
-                    
-                    # Headers - remove # symbols and treat as regular text
-                    if line.startswith('#'):
-                        if in_list:
-                            html_lines.append('</ul>')
-                            in_list = False
-                        # Remove all leading # and spaces
-                        content = html.escape(line.lstrip('#').strip())
-                        html_lines.append(f'<p style="color: {color}; margin-top: 6px; margin-bottom: 3px;">{content}</p>')
-                    # Lists
-                    elif line.strip().startswith('- ') or line.strip().startswith('* '):
-                        if not in_list:
-                            html_lines.append('<ul style="margin-top: 5px; margin-bottom: 5px;">')
-                            in_list = True
-                        content = html.escape(line.strip()[2:])
-                        html_lines.append(f'<li style="color: {color};">{content}</li>')
-                    elif regex.match(r'^\d+\.\s', line.strip()):
-                        # Numbered list
-                        if in_list:
-                            html_lines.append('</ul>')
-                            in_list = False
-                        content = html.escape(line.strip())
-                        html_lines.append(f'<p style="color: {color}; margin-left: 20px; margin-top: 2px; margin-bottom: 2px;">{content}</p>')
-                    # Skip horizontal rules
-                    elif line.strip() == '---':
-                        if in_list:
-                            html_lines.append('</ul>')
-                            in_list = False
-                        # Don't add hr, just skip
-                        continue
-                    # Regular paragraph
-                    else:
-                        if in_list:
-                            html_lines.append('</ul>')
-                            in_list = False
-                        content = html.escape(line)
-                        html_lines.append(f'<p style="color: {color}; margin-top: 2px; margin-bottom: 2px;">{content}</p>')
-                
-                if in_list:
-                    html_lines.append('</ul>')
-                
-                # Join and render as HTML
-                html_content = '\n'.join(html_lines)
-                st.markdown(html_content, unsafe_allow_html=True)
+                # Use format_text_with_source for proper color display with HTML escaping
+                formatted_content = format_text_with_source(main_content, source)
+                st.markdown(formatted_content, unsafe_allow_html=True)
                     
                 # Add References section with expandable chunks
                 if chunk_matches:
-                    # Display unified "References:" title
-                    st.markdown(f'<p style="color: {color}; margin-top: 10px; margin-bottom: 5px; font-weight: normal;">References:</p>', unsafe_allow_html=True)
+                    # Display unified "References:" title with proper color formatting
+                    references_title = format_text_with_source("References:", source)
+                    st.markdown(f'<div style="margin-top: 10px; margin-bottom: 5px;">{references_title}</div>', unsafe_allow_html=True)
                     
                     # Display each citation number with its expander
-                    for idx, chunk_id in enumerate(chunk_matches, 1):
+                    for chunk_id in chunk_matches:
                         chunk_info = ncci_chunk_details.get(chunk_id, {}) if ncci_chunk_details else {}
                         
+                        # Get the original citation number from chunk_info
+                        citation_num = chunk_info.get('citation_number', '?') if chunk_info else '?'
+                        
                         # Expander with citation number in the label (📄 [1] View Source Details)
-                        with st.expander(f"📄 [{idx}] View Source Details", expanded=False):
+                        with st.expander(f"📄 [{citation_num}] View Source Details", expanded=False):
                             st.markdown(f"**Chunk ID**: {chunk_id}")
                             
                             if chunk_info:
@@ -252,7 +199,7 @@ def render_ptp_tables(ptp_tables_by_cpt, target_cpt, ncci_manual_by_cpt=None, nc
                                     "Chunk Content",
                                     value=chunk_info.get('full_text', ''),
                                     height=300,
-                                    key=f"chunk_text_{cpt_code}_{chunk_id}_{idx}",
+                                    key=f"chunk_text_{cpt_code}_{chunk_id}_{citation_num}",
                                     label_visibility="collapsed"
                                 )
                             else:
@@ -335,7 +282,7 @@ def render_section(cpt_code, model, session_id, idx=0):
     
     # Handle Re-generate button
     if regenerate_btn:
-        with st.spinner("Running fresh analysis..."):
+        with st.spinner("Running analysis... (First-time processing may take up to 5 minutes to build indices)"):
             fresh_data = analyze_ncci_compliance(cpt_code, model=model, use_cache=False)
             st.session_state[section_key] = fresh_data
             st.success("✅ Analysis completed and saved!")
@@ -344,7 +291,14 @@ def render_section(cpt_code, model, session_id, idx=0):
     # Display results
     display_data = st.session_state[section_key]
     
-    if display_data and display_data.get("analysis_content"):
+    # Check if display_data has any results (ncci_manual_by_cpt or ptp_tables_by_cpt)
+    has_results = display_data and (
+        display_data.get("ncci_manual_by_cpt") or 
+        display_data.get("ptp_tables_by_cpt") or
+        display_data.get("analysis_content")  # Support old format
+    )
+    
+    if has_results:
         # Show source legend
         render_source_legend()
         
@@ -379,19 +333,28 @@ def render_section(cpt_code, model, session_id, idx=0):
         
         st.markdown("---")
         
-        # Display LLM analysis (black text - default)
-        st.markdown("### 🔍 Modifier Misuse Analysis")
-        st.caption("Analysis identifies opportunities where modifier misuse may have occurred")
+        # Display LLM analysis ONLY if it exists in old format (backward compatibility)
         analysis_content = display_data.get("analysis_content", "")
-        st.markdown(analysis_content)
-        
-        st.markdown("---")
+        if analysis_content:
+            st.markdown("### 🔍 Modifier Misuse Analysis")
+            st.caption("⚠️ This is legacy analysis format - newer versions integrate analysis into NCCI Manual sections above")
+            st.markdown(analysis_content)
+            st.markdown("---")
         
         # Display CPT codes referenced
         cpt_descriptions = display_data.get("cpt_descriptions", {})
         render_cpt_codes_referenced(cpt_descriptions)
         
+        # Collect content for chat (combine NCCI manual analyses if available)
         content_for_chat = analysis_content
+        if ncci_manual_by_cpt:
+            # Combine all NCCI manual analyses for chat context
+            ncci_analyses = []
+            for cpt, manual_data in ncci_manual_by_cpt.items():
+                if manual_data.get("analysis"):
+                    ncci_analyses.append(f"CPT {cpt}:\n{manual_data['analysis']}")
+            if ncci_analyses:
+                content_for_chat = "\n\n".join(ncci_analyses)
     else:
         st.warning("⚠️ No results available. Please load cache or run analysis.")
         content_for_chat = ""

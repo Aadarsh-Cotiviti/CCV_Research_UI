@@ -88,8 +88,8 @@ def filter_ptp_tables_by_cpts(cpt_codes):
     """
     print(f"\n📊 Loading and filtering PTP Edit Tables for {len(cpt_codes)} CPT code(s)...")
     
-    modifier_0_path = "output/preprocessed_ptp_edit_table_modifier0.csv"
-    modifier_1_path = "output/preprocessed_ptp_edit_table_modifier1.csv"
+    modifier_0_path = "data/preprocessed_ptp_edit_table_modifier0.csv"
+    modifier_1_path = "data/preprocessed_ptp_edit_table_modifier1.csv"
     
     results = {}
     
@@ -183,90 +183,6 @@ def filter_ptp_tables_by_cpts(cpt_codes):
         import traceback
         traceback.print_exc()
         return {cpt: {"modifier_0": None, "modifier_1": None, "source": "local_kb", "has_data": False} for cpt in cpt_codes}
-
-def build_ncci_compliance_prompt(target_cpt, all_cpts_md_data, neighboring_codes=None):
-    """
-    Build prompt for NCCI Compliance Check analysis focused on modifier misuse identification
-    
-    Args:
-        target_cpt: Target CPT code to analyze
-        all_cpts_md_data: Dict with CPT codes as keys, each containing modifier_0_md, modifier_1_md, counts
-        neighboring_codes: List of neighboring CPT codes (optional)
-        
-    Returns:
-        Formatted prompt string for LLM
-    """
-    window_start, window_end = compute_audit_window()
-    
-    codes_info = f"CPT {target_cpt}"
-    if neighboring_codes and len(neighboring_codes) > 0:
-        codes_info += f" and its neighboring codes ({', '.join(neighboring_codes)})"
-    
-    # Build the PTP edit tables section for all CPTs
-    all_tables_section = ""
-    
-    for cpt_code in [target_cpt] + (neighboring_codes or []):
-        if cpt_code in all_cpts_md_data:
-            data = all_cpts_md_data[cpt_code]
-            mod0_md = data.get("modifier_0_md", "")
-            mod1_md = data.get("modifier_1_md", "")
-            mod0_count = data.get("mod0_count", 0)
-            mod1_count = data.get("mod1_count", 0)
-            
-            cpt_marker = "**[TARGET CPT]**" if cpt_code == target_cpt else "[Neighboring Code]"
-            
-            if mod0_count == 0 and mod1_count == 0:
-                all_tables_section += f"\n### {cpt_marker} CPT {cpt_code}\n"
-                all_tables_section += f"ℹ️  CPT code {cpt_code} does not appear in the NCCI PTP edit tables.\n"
-            else:
-                all_tables_section += f"\n### {cpt_marker} CPT {cpt_code} - PTP Edit Summary\n"
-                all_tables_section += f"- Modifier 0 (Not Allowed): {mod0_count} code pairs\n"
-                all_tables_section += f"- Modifier 1 (Allowed with modifier): {mod1_count} code pairs\n"
-                all_tables_section += f"- Total: {mod0_count + mod1_count} PTP edits\n\n"
-                
-                all_tables_section += f"**Modifier 0 Edits (Cannot bill {cpt_code} with these codes):**\n"
-                all_tables_section += f"{mod0_md if mod0_md else 'No Modifier 0 edits.'}\n\n"
-                
-                all_tables_section += f"**Modifier 1 Edits (Can bill {cpt_code} with these codes using appropriate modifier):**\n"
-                all_tables_section += f"{mod1_md if mod1_md else 'No Modifier 1 edits.'}\n\n"
-    
-    prompt = f"""
-Analyze NCCI PTP (Procedure-to-Procedure) Edit compliance for {codes_info} (Audit Window: {window_start} - {window_end}).
-
-**Focus: Identify opportunities where misuse of modifiers may have occurred.**
-
-{all_tables_section}
-
-Provide structured analysis:
-
-1. **Summary**: Overview of NCCI edits for {target_cpt} and neighboring codes
-   - Primary focus on target CPT {target_cpt}
-   - Compare edit patterns across neighboring codes
-   - Overall compliance risk level
-
-2. **Modifier 0 Analysis (Not Allowed)**:
-   - Identify code pairs that CANNOT be billed together for {target_cpt}
-   - Compare with neighboring codes' Modifier 0 edits
-   - Flag high-risk combinations commonly billed incorrectly
-   - Explain rationale for significant edits (based on PTP_Edit_Rationale column)
-
-3. **Modifier 1 Analysis (Allowed with Modifier)**:
-   - Identify code pairs that CAN be billed together with appropriate modifier for {target_cpt}
-   - Compare modifier allowances across neighboring codes
-   - Specify which modifiers are appropriate (e.g., modifier 59, 25)
-   - Note documentation requirements
-
-4. **Compliance Risks & Audit Opportunities**:
-   - Common billing errors with {target_cpt} and related codes
-   - Compare compliance risks across {target_cpt} and neighboring codes
-   - Unbundling risks and patterns to avoid
-   - Recommendations for claim review and audit focus areas
-   - Potential modifier abuse patterns to monitor
-
-Format: Section headers with bullet points. Focus on actionable insights.
-Do not include introductory/concluding remarks. Start directly with section 1.
-"""
-    return prompt
 
 
 def extract_cpt_codes_from_ptp_tables(ptp_tables_by_cpt):
@@ -419,7 +335,9 @@ def ncci_manual_retrieval(target_cpt):
     # Generate new analysis
     print(f"   🔄 Generating new NCCI manual analysis...")
     try:
-        output_file_path = ncci_llm_analysis(target_cpt)
+        # Call with auto_build=True for Streamlit app (non-interactive)
+        # This will automatically build indices if missing
+        output_file_path = ncci_llm_analysis(target_cpt, auto_build=True)
         
         with open(output_file_path, 'r', encoding='utf-8') as f:
             manual_content = f.read()
@@ -472,16 +390,17 @@ def extract_chunk_details_from_manual(target_cpt, manual_content):
         print("   ⚠️  No analysis content found")
         return {}
     
-    # Extract chunk IDs from References section
+    # Extract chunk IDs with their citation numbers from References section
     # Pattern: 1. `chunk_000383` - Pages 232-232, G. Ophthalmology
-    chunk_pattern = r'\d+\.\s*`(chunk_\d+)`'
-    chunk_ids = re.findall(chunk_pattern, analysis_text)
+    # Pattern may also include citation marker: 1. `chunk_000383` - Pages 232-232, G. Ophthalmology ✓
+    chunk_pattern = r'(\d+)\.\s*`(chunk_\d+)`'
+    chunk_matches = re.findall(chunk_pattern, analysis_text)
     
-    if not chunk_ids:
+    if not chunk_matches:
         print("   ⚠️  No chunk IDs found in References section")
         return {}
     
-    print(f"   Found {len(chunk_ids)} chunk IDs: {', '.join(chunk_ids)}")
+    print(f"   Found {len(chunk_matches)} chunk references")
     
     # Load retrieved chunks JSON
     chunks_path = project_root / 'ncci_rag' / 'output' / f'retrieved_chunks_cpt_{target_cpt}.json'
@@ -496,9 +415,9 @@ def extract_chunk_details_from_manual(target_cpt, manual_content):
         
         all_chunks = chunks_data.get('chunks', [])
         
-        # Build mapping from chunk_id to full chunk details
+        # Build mapping from chunk_id to full chunk details (preserving citation numbers)
         chunk_details = {}
-        for chunk_id in chunk_ids:
+        for citation_num, chunk_id in chunk_matches:
             # Find matching chunk
             matching_chunk = next((c for c in all_chunks if c.get('chunk_id') == chunk_id), None)
             
@@ -508,13 +427,14 @@ def extract_chunk_details_from_manual(target_cpt, manual_content):
                     "pages": matching_chunk.get('pages', []),
                     "section": matching_chunk.get('section', ''),
                     "chunk_id": chunk_id,
-                    "topic_tags": matching_chunk.get('topic_tags', [])
+                    "topic_tags": matching_chunk.get('topic_tags', []),
+                    "citation_number": int(citation_num)  # Preserve original citation number
                 }
-                print(f"   ✅ Mapped {chunk_id}: {matching_chunk.get('section', 'N/A')}")
+                print(f"   ✅ Mapped [{citation_num}] {chunk_id}: {matching_chunk.get('section', 'N/A')}")
             else:
                 print(f"   ⚠️  Chunk {chunk_id} not found in retrieved chunks")
         
-        print(f"   ✅ Successfully mapped {len(chunk_details)}/{len(chunk_ids)} chunks")
+        print(f"   ✅ Successfully mapped {len(chunk_details)}/{len(chunk_matches)} chunks")
         return chunk_details
         
     except Exception as e:
@@ -573,49 +493,22 @@ def analyze_ncci_compliance(target_cpt, model="gpt-4o-mini", use_cache=True):
         all_codes = [target_cpt] + neighboring_codes
         filtered_tables_by_cpt = filter_ptp_tables_by_cpts(all_codes)
         
-        # Prepare markdown data for each CPT
-        all_cpts_md_data = {}
+        # Get NCCI manual information for all CPT codes (target + neighboring)
+        # This replaces the old LLM-based analysis from PTP tables
+        print("\n📚 Retrieving NCCI manual analysis from internal knowledge base...")
+        all_cpt_codes = [target_cpt] + neighboring_codes
+        ncci_manual_by_cpt = {}
+        ncci_chunk_details_by_cpt = {}
         
-        for cpt_code, filtered_tables in filtered_tables_by_cpt.items():
-            modifier_0_md = ""
-            modifier_1_md = ""
-            mod0_count = 0
-            mod1_count = 0
-            
-            # Modifier 0 (combined Code 1 and Code 2)
-            if filtered_tables.get("modifier_0") and filtered_tables["modifier_0"].get("dataframe") is not None:
-                df_mod0 = filtered_tables["modifier_0"]["dataframe"]
-                if not df_mod0.empty:
-                    modifier_0_md = df_mod0.to_markdown(index=False)
-                    mod0_count = len(df_mod0)
-            
-            # Modifier 1 (combined Code 1 and Code 2)
-            if filtered_tables.get("modifier_1") and filtered_tables["modifier_1"].get("dataframe") is not None:
-                df_mod1 = filtered_tables["modifier_1"]["dataframe"]
-                if not df_mod1.empty:
-                    modifier_1_md = df_mod1.to_markdown(index=False)
-                    mod1_count = len(df_mod1)
-            
-            all_cpts_md_data[cpt_code] = {
-                "modifier_0_md": modifier_0_md,
-                "modifier_1_md": modifier_1_md,
-                "mod0_count": mod0_count,
-                "mod1_count": mod1_count
-            }
-        
-        print(f"✅ Prepared PTP edit data for {len(all_codes)} CPT code(s)")
-        
-        # Build prompt and query LLM
-        print("\n🤖 Generating NCCI compliance analysis (focusing on modifier misuse)...")
-        prompt = build_ncci_compliance_prompt(target_cpt, all_cpts_md_data, neighboring_codes)
-        
-        messages = [
-            {"role": "system", "content": "You are an expert medical coding compliance specialist with deep knowledge of NCCI edits, modifier usage rules, and audit risk identification. Focus on identifying specific opportunities where modifier misuse may have occurred."},
-            {"role": "user", "content": prompt}
-        ]
-        
-        analysis_result = query_llm(messages, model=model)
-        print(f"✅ Analysis completed")
+        for cpt_code in all_cpt_codes:
+            print(f"\n📚 Retrieving NCCI manual information for CPT {cpt_code}...")
+            manual_content = ncci_manual_retrieval(cpt_code)
+            if manual_content:
+                ncci_manual_by_cpt[cpt_code] = manual_content
+                # Extract chunk details for this CPT
+                chunk_details = extract_chunk_details_from_manual(cpt_code, manual_content)
+                if chunk_details:
+                    ncci_chunk_details_by_cpt[cpt_code] = chunk_details
         
         # Prepare PTP tables for saving (convert dataframe to dict for JSON serialization)
         ptp_tables_for_save = {}
@@ -637,21 +530,6 @@ def analyze_ncci_compliance(target_cpt, model="gpt-4o-mini", use_cache=True):
         # Extract CPT codes and get their descriptions
         cpt_descriptions = get_cpt_descriptions_for_ptp_tables(ptp_tables_for_save, target_cpt, model)
         
-        # Get NCCI manual information for all CPT codes (target + neighboring)
-        all_cpt_codes = [target_cpt] + neighboring_codes
-        ncci_manual_by_cpt = {}
-        ncci_chunk_details_by_cpt = {}
-        
-        for cpt_code in all_cpt_codes:
-            print(f"\n📚 Retrieving NCCI manual information for CPT {cpt_code}...")
-            manual_content = ncci_manual_retrieval(cpt_code)
-            if manual_content:
-                ncci_manual_by_cpt[cpt_code] = manual_content
-                # Extract chunk details for this CPT
-                chunk_details = extract_chunk_details_from_manual(cpt_code, manual_content)
-                if chunk_details:
-                    ncci_chunk_details_by_cpt[cpt_code] = chunk_details
-
         # Save findings to JSON file
         output_dir = f"output/services_findings/{target_cpt}"
         os.makedirs(output_dir, exist_ok=True)
@@ -667,9 +545,9 @@ def analyze_ncci_compliance(target_cpt, model="gpt-4o-mini", use_cache=True):
             "ptp_tables_by_cpt": ptp_tables_for_save,
             "ncci_manual_by_cpt": ncci_manual_by_cpt,
             "ncci_chunk_details_by_cpt": ncci_chunk_details_by_cpt,
-            "analysis_content": analysis_result,           
+            "analysis_content": "",  # No longer needed - analysis is in ncci_manual_by_cpt
             "cpt_descriptions": cpt_descriptions,            
-            "source": "llm"
+            "source": "internal_kb"  # Changed from "llm" since we use internal KB
         }
         
         with open(output_path, "w", encoding="utf-8") as f:
@@ -677,13 +555,13 @@ def analyze_ncci_compliance(target_cpt, model="gpt-4o-mini", use_cache=True):
         print(f"💾 Saved findings to {output_path}")
         
         return {
-            "analysis_content": analysis_result,
+            "analysis_content": "",  # No longer needed
             "ptp_tables_by_cpt": ptp_tables_for_save,
             "ncci_manual_by_cpt": ncci_manual_by_cpt,
             "ncci_chunk_details_by_cpt": ncci_chunk_details_by_cpt,
             "neighboring_codes": neighboring_codes,
             "cpt_descriptions": cpt_descriptions,
-            "source": "llm"
+            "source": "internal_kb"
         }
         
     except Exception as e:

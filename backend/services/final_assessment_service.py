@@ -24,9 +24,100 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from .utils import compute_audit_window
+from llm_wrapper import query_llm
 
 # Output directory for generated reports
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output")
+
+
+def summarize_ncci_manual_sections(cpt_code, full_analysis):
+    """
+    Extract and summarize key NCCI manual sections using LLM
+    
+    Args:
+        cpt_code: CPT code
+        full_analysis: Full NCCI manual analysis markdown
+        
+    Returns:
+        Concise summary of 4 key sections
+    """
+    if not full_analysis:
+        return ""
+    
+    prompt = f"""You are analyzing NCCI compliance documentation for CPT code {cpt_code}.
+
+From the following NCCI manual analysis, extract and provide a CONCISE SUMMARY for these 4 sections ONLY:
+1. Modifier Rules for CPT {cpt_code}
+2. PTP Edit Rules
+3. Misuse Opportunities & Compliance Risks
+4. Clinical Context & Special Rules
+
+IMPORTANT INSTRUCTIONS:
+- For EACH section, provide a 2-3 sentence summary that captures the KEY points
+- Do NOT list every detail - synthesize the main rules/risks
+- Write as a paragraph, do NOT use bullet points or list formatting
+- Remove all reference citations like [1], [2]
+- Skip the title line that starts with 🎯
+- Do NOT include the References section
+- Be concise and professional
+
+Format your response as:
+Modifier Rules for CPT {cpt_code}:
+[2-3 sentence summary paragraph]
+
+PTP Edit Rules:
+[2-3 sentence summary paragraph]
+
+Misuse Opportunities & Compliance Risks:
+[2-3 sentence summary paragraph]
+
+Clinical Context & Special Rules:
+[2-3 sentence summary paragraph]
+
+NCCI Manual Analysis:
+{full_analysis}
+"""
+    
+    try:
+        # Prepare messages for query_llm (following guideline_examination_service pattern)
+        messages = [
+            {
+                "role": "system",
+                "content": "You are an expert medical coding specialist analyzing NCCI compliance documentation."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+        
+        print(f"   🤖 Calling LLM to summarize NCCI manual...")
+        response = query_llm(messages, model="gpt-4.1")
+        
+        print(f"   📥 LLM response received, length: {len(response) if response else 0} chars")
+        
+        # Clean up the summary
+        summary = response.strip()
+        
+        # Remove reference citations
+        import re
+        summary = re.sub(r'\[\d+\]', '', summary)
+        
+        if summary:
+            print(f"   ✅ NCCI summary cleaned, final length: {len(summary)} chars")
+            # Print first 200 chars for verification
+            print(f"   Preview: {summary[:200]}...")
+            return summary
+        else:
+            print(f"   ⚠️  LLM returned empty summary")
+            return ""
+        
+    except Exception as e:
+        print(f"⚠️  Error summarizing NCCI manual: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return ""
+
 
 
 def load_section_results(target_cpt, section_num):
@@ -45,7 +136,7 @@ def load_section_results(target_cpt, section_num):
     file_path = os.path.join(output_dir, file_name)
     
     if not os.path.exists(file_path):
-        print(f"⚠️  Section {section_num} results not found: {file_path}")
+        print(f"⚠️  Section {section_num} results not found. Please run Sections 1-6 analysis first before generating final assessment.")
         return None
     
     try:
@@ -112,8 +203,8 @@ def extract_ncci_results(section5_data):
     # Extract PTP table results
     ptp_tables = section5_data.get('ptp_tables_by_cpt', {})
     
-    # Extract NCCI manual results from analysis_content
-    analysis_content = section5_data.get('analysis_content', '')
+    # Extract NCCI manual results
+    ncci_manual_by_cpt = section5_data.get('ncci_manual_by_cpt', {})
     
     for cpt_code in all_codes:
         result = {
@@ -121,7 +212,8 @@ def extract_ncci_results(section5_data):
             'ptp_modifier_0': None,
             'ptp_modifier_1': None,
             'ncci_manual_summary': '',
-            'has_ncci_data': False
+            'has_ncci_data': False,
+            'source': 'internal_kb'
         }
         
         # Get PTP table data for this code
@@ -143,16 +235,26 @@ def extract_ncci_results(section5_data):
                     'data': mod1.get('data', [])
                 }
                 result['has_ncci_data'] = True
-        
-        # Extract relevant NCCI manual content for this code from analysis_content
-        # The analysis_content contains text analysis of NCCI guidelines
-        if cpt_code in analysis_content:
-            # Find sections mentioning this code
-            lines = analysis_content.split('\n')
-            relevant_lines = [line for line in lines if cpt_code in line]
-            if relevant_lines:
-                result['ncci_manual_summary'] = '\n'.join(relevant_lines[:5])  # First 5 relevant lines
-                result['has_ncci_data'] = True
+
+        # Get NCCI manual analysis for this code
+        if cpt_code in ncci_manual_by_cpt:
+            manual_data = ncci_manual_by_cpt[cpt_code]
+            full_analysis = manual_data.get('analysis', '')
+            
+            # Summarize key sections using LLM
+            if full_analysis:
+                print(f"   📝 Summarizing NCCI manual for CPT {cpt_code}...")
+                summary = summarize_ncci_manual_sections(cpt_code, full_analysis)
+                
+                if summary:
+                    result['ncci_manual_summary'] = summary
+                    print(f"   ✅ CPT {cpt_code}: NCCI summary generated ({len(summary)} chars)")
+                    result['has_ncci_data'] = True
+                else:
+                    # If LLM fails, use original analysis as fallback
+                    print(f"   ⚠️  CPT {cpt_code}: LLM summarization failed, using original content")
+                    result['ncci_manual_summary'] = full_analysis
+                    result['has_ncci_data'] = True
         
         ncci_results[cpt_code] = result
     
@@ -201,24 +303,43 @@ def extract_payment_history(section3_data):
         section3_data: Section 3 results dict
         
     Returns:
-        Dict with payment history data
+        Dict with payment history data for APC, ASC, and PNPP
     """
     payment_history = {
-        'data': [],
-        'has_data': False
+        'apc': {'data': [], 'has_data': False},
+        'asc': {'data': [], 'has_data': False},
+        'pnpp': {'data': [], 'has_data': False}
     }
     
     if not section3_data:
         return payment_history
     
-    # Extract target_cpt_payment_history
+    # Extract target_cpt_payment_history which contains all three payment types
     target_payment = section3_data.get('target_cpt_payment_history', {})
     
-    if target_payment and 'data' in target_payment:
-        payment_history['data'] = target_payment['data']
-        payment_history['has_data'] = len(target_payment['data']) > 0
+    # Extract APC payment history
+    if 'apc' in target_payment and 'data' in target_payment['apc']:
+        payment_history['apc']['data'] = target_payment['apc']['data']
+        payment_history['apc']['has_data'] = len(target_payment['apc']['data']) > 0
+        print(f"   📋 APC: {len(payment_history['apc']['data'])} records")
     
-    print(f"📋 Extracted payment history with {len(payment_history['data'])} records from Section 3")
+    # Extract ASC payment history
+    if 'asc' in target_payment and 'data' in target_payment['asc']:
+        payment_history['asc']['data'] = target_payment['asc']['data']
+        payment_history['asc']['has_data'] = len(target_payment['asc']['data']) > 0
+        print(f"   📋 ASC: {len(payment_history['asc']['data'])} records")
+    
+    # Extract PNPP payment history
+    if 'pnpp' in target_payment and 'data' in target_payment['pnpp']:
+        payment_history['pnpp']['data'] = target_payment['pnpp']['data']
+        payment_history['pnpp']['has_data'] = len(target_payment['pnpp']['data']) > 0
+        print(f"   📋 PNPP: {len(payment_history['pnpp']['data'])} records")
+    
+    total_records = (len(payment_history['apc']['data']) + 
+                    len(payment_history['asc']['data']) + 
+                    len(payment_history['pnpp']['data']))
+    print(f"📋 Extracted payment history with {total_records} total records from Section 3")
+    
     return payment_history
 
 
@@ -277,7 +398,7 @@ def generate_final_assessment(target_cpt, use_cache=True):
     print(f"   - CPT Descriptions: {len(cpt_descriptions)} codes")
     print(f"   - NCCI Results: {len(ncci_results)} codes")
     print(f"   - Device Codes: {len(device_codes)} devices")
-    print(f"   - Payment Records: {len(payment_history['data'])} records")
+    print(f"   - Payment Records: APC={len(payment_history['apc']['data'])}, ASC={len(payment_history['asc']['data'])}, PNPP={len(payment_history['pnpp']['data'])}")
     
     return assessment
 

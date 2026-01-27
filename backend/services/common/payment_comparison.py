@@ -1,18 +1,20 @@
+# python -m services.common.apc_payment_comparison
 """
-Payment Comparison Data Loader
+APC Payment Comparison Data Loader
 
 This module handles loading and preprocessing of CMS APC payment rate data
-from quarterly addendum files (2023-2025).
+from quarterly addendum files (2024-2026).
 """
 
 import os
 import pandas as pd
 import re
 from typing import Dict, List, Tuple
+from .cms_exclusions import get_exclusions_for_cpt_list
 
 
 # Expected columns to extract from each sheet
-REQUIRED_COLUMNS = ['HCPCS Code', 'SI', 'APC Code', 'Payment Rate']
+REQUIRED_COLUMNS = ['HCPCS Code', 'SI', 'APC', 'Payment Rate']
 
 
 def parse_sheet_name(sheet_name: str) -> Tuple[str, str, str]:
@@ -36,14 +38,15 @@ def parse_sheet_name(sheet_name: str) -> Tuple[str, str, str]:
     return None, None, None
 
 
-def filter_years(sheet_names: List[str], start_year: int = 2023, end_year: int = 2025) -> List[str]:
+def filter_years(sheet_names: List[str], start_year: int = 2024, end_year: int = 2026, january_only: bool = True) -> List[str]:
     """
-    Filter sheet names to only include those within the specified year range
+    Filter sheet names to only include those within the specified year range and optionally January only
     
     Args:
         sheet_names: List of all sheet names
         start_year: Starting year (inclusive)
         end_year: Ending year (inclusive)
+        january_only: If True, only include January sheets (default: True)
         
     Returns:
         Filtered list of sheet names
@@ -53,6 +56,9 @@ def filter_years(sheet_names: List[str], start_year: int = 2023, end_year: int =
     for sheet_name in sheet_names:
         year, month, addendum = parse_sheet_name(sheet_name)
         if year and start_year <= int(year) <= end_year:
+            # If january_only is True, only include January sheets
+            if january_only and month != 'January':
+                continue
             filtered.append(sheet_name)
     
     return filtered
@@ -95,16 +101,16 @@ def detect_header_row(excel_path: str, sheet_name: str, max_rows: int = 20) -> i
 
 def load_payment_data(
     excel_path: str = None,
-    start_year: int = 2023,
-    end_year: int = 2025
+    start_year: int = 2024,
+    end_year: int = 2026
 ) -> Dict[str, pd.DataFrame]:
     """
     Load payment rate data from quarterly addendum Excel file
     
     Args:
         excel_path: Path to the Excel file. If None, uses default path.
-        start_year: Starting year to include (default: 2023)
-        end_year: Ending year to include (default: 2025)
+        start_year: Starting year to include (default: 2024)
+        end_year: Ending year to include (default: 2026)
         
     Returns:
         Dictionary mapping sheet names to DataFrames with columns:
@@ -113,7 +119,7 @@ def load_payment_data(
     # Default path
     if excel_path is None:
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        excel_path = os.path.join(base_dir, 'data', 'cpt_payment_changes_quarterly.xlsx')
+        excel_path = os.path.join(base_dir, 'data', 'apc_payment_changes_quarterly.xlsx')
     
     if not os.path.exists(excel_path):
         raise FileNotFoundError(f"Payment data file not found: {excel_path}")
@@ -186,38 +192,43 @@ def load_payment_data(
     return payment_data
 
 
-def preprocess_all_payment_data(
+def apc_get_payment_history_for_multiple_cpts(
+    cpt_codes: List[str],
     excel_path: str = None,
-    start_year: int = 2023,
-    end_year: int = 2025,
-    output_path: str = None
+    january_only: bool = True
 ) -> pd.DataFrame:
     """
-    Preprocess all payment data and save to CSV file
+    Get payment history for multiple CPT codes directly from Excel file
     
     Args:
-        excel_path: Path to the Excel file. If None, uses default path.
-        start_year: Starting year to include (default: 2023)
-        end_year: Ending year to include (default: 2025)
-        output_path: Path to save CSV. If None, uses default output folder.
+        cpt_codes: List of CPT codes to look up
+        excel_path: Path to Excel file. If None, uses default path.
+        january_only: If True, only return January data for each year (default: True)
         
     Returns:
-        Combined DataFrame with all payment records sorted by CPT code and date
+        DataFrame with payment history for all specified CPT codes
     """
-    # Load all payment data
-    payment_data = load_payment_data(excel_path=excel_path, start_year=start_year, end_year=end_year)
+    # Load payment data from Excel
+    payment_data = load_payment_data(excel_path=excel_path)
     
-    # Collect all records
+    # Convert CPT codes to strings
+    cpt_codes_str = [str(code) for code in cpt_codes]
+    
+    # Collect records for all CPT codes
     all_records = []
-    
-    print(f"\n📝 Processing all CPT codes from {len(payment_data)} sheets...")
-    
     for sheet_name, df in payment_data.items():
         # Parse period information
         year, month, addendum = parse_sheet_name(sheet_name)
         
-        # Add period columns to each record
-        for _, row in df.iterrows():
+        # Filter for specified CPT codes
+        cpt_rows = df[df['HCPCS Code'].isin(cpt_codes_str)]
+
+        # Filter for specific SI
+        keep_SI = ['J1','S','T']
+        cpt_rows = cpt_rows[cpt_rows['SI'].isin(keep_SI)]
+        
+        # Add period columns to each matching record
+        for _, row in cpt_rows.iterrows():
             record = {
                 'HCPCS Code': row['HCPCS Code'],
                 'Year': year,
@@ -230,136 +241,101 @@ def preprocess_all_payment_data(
             }
             all_records.append(record)
     
-    # Convert to DataFrame
-    combined_df = pd.DataFrame(all_records)
+    # Create DataFrame and sort
+    combined_history = pd.DataFrame(all_records)
+    if not combined_history.empty:
+        combined_history = combined_history.sort_values(['HCPCS Code', 'Year'])
     
-    # Ensure APC Code is stored as string (APC codes like "5072", not integers with decimals)
-    # Convert to numeric first, then to int, then to string to remove decimals
-    combined_df['APC Code'] = pd.to_numeric(combined_df['APC Code'], errors='coerce').fillna(0).astype(int).astype(str).str.strip()
-    
-    # Sort by HCPCS Code, Year, and Month
-    month_order = ['January', 'February', 'March', 'April', 'May', 'June',
-                  'July', 'August', 'September', 'October', 'November', 'December']
-    combined_df['Month_Num'] = combined_df['Month'].apply(
-        lambda x: month_order.index(x) if x in month_order else 99
-    )
-    combined_df = combined_df.sort_values(['HCPCS Code', 'Year', 'Month_Num'])
-    combined_df = combined_df.drop('Month_Num', axis=1)
-    
-    # Reorder columns for better readability
-    column_order = ['HCPCS Code', 'Year', 'Month', 'Addendum', 'Period', 'SI', 'APC Code', 'Payment Rate']
-    combined_df = combined_df[column_order]
-    
-    # Save to CSV
-    if output_path is None:
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        output_dir = os.path.join(base_dir, 'output')
-        os.makedirs(output_dir, exist_ok=True)
-        output_path = os.path.join(output_dir, 'preprocessed_payment_comparison.csv')
-    
-    combined_df.to_csv(output_path, index=False, encoding='utf-8')
-    print(f"✅ Saved {len(combined_df)} records to {output_path}")
-    print(f"   Total unique CPT codes: {combined_df['HCPCS Code'].nunique()}")
-    
-    return combined_df
+    return combined_history
 
 
-def load_preprocessed_payment_data(file_path: str = None) -> pd.DataFrame:
-    """
-    Load preprocessed payment data from CSV
-    
-    Args:
-        file_path: Path to the preprocessed CSV file. If None, uses default path.
-        
-    Returns:
-        DataFrame with all payment records
-    """
-    if file_path is None:
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        file_path = os.path.join(base_dir, 'output', 'preprocessed_payment_comparison.csv')
-    
-    # If file doesn't exist, generate it first
-    if not os.path.exists(file_path):
-        print(f"⚠️  Preprocessed file not found: {file_path}")
-        print("📝 Generating preprocessed data...")
-        preprocess_all_payment_data(output_path=file_path)
-    
-    df = pd.read_csv(file_path, encoding='utf-8')
-    print(f"✅ Loaded {len(df)} payment records from {file_path}")
-    return df
-
-
-def get_payment_history_for_cpt(
-    cpt_code: str,
-    preprocessed_data: pd.DataFrame = None,
-    january_only: bool = True
-) -> pd.DataFrame:
-    """
-    Get payment history for a specific CPT code from preprocessed data
-    
-    Args:
-        cpt_code: CPT code to look up
-        preprocessed_data: Preloaded preprocessed DataFrame. If None, will load from file.
-        january_only: If True, only return January data for each year (default: True)
-        
-    Returns:
-        DataFrame with payment history for the specified CPT code
-    """
-    # Load preprocessed data if not provided
-    if preprocessed_data is None:
-        preprocessed_data = load_preprocessed_payment_data()
-    
-    # Filter for specific CPT code
-    cpt_history = preprocessed_data[preprocessed_data['HCPCS Code'] == str(cpt_code)].copy()
-    
-    # Filter to January only if requested
-    if january_only and not cpt_history.empty:
-        cpt_history = cpt_history[cpt_history['Month'] == 'January'].copy()
-    
-    return cpt_history
-
-
-def get_payment_history_for_multiple_cpts(
+def get_apc_payment_history_with_exclusions(
     cpt_codes: List[str],
-    preprocessed_data: pd.DataFrame = None,
+    exclusion_category: str = 'APC',
+    excel_path: str = None,
     january_only: bool = True
-) -> pd.DataFrame:
+) -> Dict:
     """
-    Get payment history for multiple CPT codes from preprocessed data
+    Get payment history for multiple CPT codes and filter out excluded codes
     
     Args:
         cpt_codes: List of CPT codes to look up
-        preprocessed_data: Preloaded preprocessed DataFrame. If None, will load from file.
+        exclusion_category: CMS exclusion category - 'APC', 'ASC', or 'PNPP' (default: 'APC')
+        excel_path: Path to Excel file. If None, uses default path.
         january_only: If True, only return January data for each year (default: True)
         
     Returns:
-        DataFrame with payment history for all specified CPT codes
+        Dictionary containing:
+            - 'data': Full payment history (all codes)
+            - 'data_filtered': Payment history with excluded codes removed
+            - 'exclusions': Dictionary of excluded codes with their info
+            - 'excluded_cpt_codes': List of excluded CPT codes
+            - 'record_count': Total number of records
+            - 'record_count_filtered': Number of records after filtering
     """
-    # Load preprocessed data if not provided
-    if preprocessed_data is None:
-        preprocessed_data = load_preprocessed_payment_data()
+    # Get payment history for all codes (directly from Excel)
+    payment_history_df = apc_get_payment_history_for_multiple_cpts(
+        cpt_codes=cpt_codes,
+        excel_path=excel_path,
+        january_only=january_only
+    )
     
-    # Filter for specified CPT codes
-    cpt_codes_str = [str(code) for code in cpt_codes]
-    combined_history = preprocessed_data[preprocessed_data['HCPCS Code'].isin(cpt_codes_str)].copy()
+    if payment_history_df.empty:
+        return {
+            "data": [],
+            "data_filtered": [],
+            "data_filtered_df": pd.DataFrame(),  # Empty DataFrame
+            "exclusions": {},
+            "excluded_cpt_codes": [],
+            "record_count": 0,
+            "record_count_filtered": 0
+        }
     
-    # Filter to January only if requested
-    if january_only and not combined_history.empty:
-        combined_history = combined_history[combined_history['Month'] == 'January'].copy()
+    # Check for exclusions
+    print(f"\n🔍 Checking CMS {exclusion_category} exclusions list...")
+    exclusions_info = get_exclusions_for_cpt_list(cpt_codes, category=exclusion_category)
+    excluded_cpt_codes = list(exclusions_info.keys())
     
-    # Sort by CPT code and year for better readability
-    combined_history = combined_history.sort_values(['HCPCS Code', 'Year'])
+    if exclusions_info:
+        print(f"⚠️  Found {len(exclusions_info)} excluded code(s) in {exclusion_category}:")
+        for cpt, info in exclusions_info.items():
+            print(f"   - {cpt}: Status Indicator '{info['status_indicator']}'")
+    else:
+        print(f"✅ No codes found in {exclusion_category} exclusions list")
     
-    return combined_history
+    # Filter out excluded codes from payment table
+    payment_history_filtered_df = payment_history_df[
+        ~payment_history_df['HCPCS Code'].isin(excluded_cpt_codes)
+    ].copy()
+
+    if len(excluded_cpt_codes) > 0:
+        print(f"📋 Payment table will show {len(payment_history_filtered_df)} records (excluded codes removed)")
+    
+    # Return both full and filtered data
+    return {
+        "data": payment_history_df.to_dict(orient='records'),
+        "data_filtered": payment_history_filtered_df.to_dict(orient='records'),
+        "data_filtered_df": payment_history_filtered_df,  # DataFrame for markdown conversion
+        "exclusions": exclusions_info if exclusions_info else {},
+        "excluded_cpt_codes": excluded_cpt_codes,
+        "record_count": len(payment_history_df),
+        "record_count_filtered": len(payment_history_filtered_df)
+    }
 
 
 # ==================== Test Function ====================
 
 if __name__ == "__main__":
-    """Test the payment data loading and preprocessing"""
-    combined_df = preprocess_all_payment_data(start_year=2023, end_year=2025)
-    loaded_df = load_preprocessed_payment_data()
-    
-    test_cpt = "97810"
-    history = get_payment_history_for_cpt(test_cpt, loaded_df)
+    """Test the payment data loading"""
+    test_cpt_list = ["97810", "11042"]
+    history = get_apc_payment_history_with_exclusions(
+        cpt_codes=test_cpt_list,
+        exclusion_category='APC',
+        january_only=True
+    )
+    print(f"\n✅ Test completed!")
+    print(f"   Found {history['record_count']} total records")
+    print(f"   After filtering: {history['record_count_filtered']} records")
+    print(f"   Excluded codes: {history['excluded_cpt_codes']}")
+
     
