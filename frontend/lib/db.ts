@@ -1,6 +1,8 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { drizzle } from "drizzle-orm/libsql";
+import { migrate } from "drizzle-orm/libsql/migrator";
 import * as schemas from "../db/schemas";
 import { and, desc, eq, inArray, not, sql } from "drizzle-orm";
 import { ResearchSections } from "@/app/(auth-protected)/apc-research/server-actions";
@@ -11,6 +13,18 @@ export const db = drizzle(dbUrl, {
   schema: schemas,
   casing: "snake_case",
 });
+
+const migrationsFolder = path.join(process.cwd(), "drizzle");
+
+export const initDatabase = async () => {
+  const hasMigrations = await fs.access(migrationsFolder).then(
+    () => true,
+    () => false,
+  );
+  if (!hasMigrations) return;
+
+  await migrate(db, { migrationsFolder });
+};
 
 const parseCsv = (value?: string | null) =>
   (value ?? "")
