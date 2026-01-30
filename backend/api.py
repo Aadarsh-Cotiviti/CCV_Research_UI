@@ -23,12 +23,12 @@ from api_schemas import (
     ResearchRunResult,
     ChatRequest
 )
-from backend.services.code_description_service import analyze_code_descriptions
-from backend.services.device_code_service import analyze_device_code_analysis
-from backend.services.guideline_examination_service import analyze_guideline_examination
-from backend.services.ncci_compliance_service import analyze_ncci_compliance
-from backend.services.payment_rate_service import analyze_payment_rate_comparison
-from backend.services.reference_material_service import analyze_reference_material_review
+from services.code_description_service import analyze_code_descriptions
+from services.device_code_service import analyze_device_code_analysis
+from services.guideline_examination_service import analyze_guideline_examination
+from services.ncci_compliance_service import analyze_ncci_compliance
+from services.payment_rate_service import analyze_payment_rate_comparison
+from services.reference_material_service import analyze_reference_material_review
 from llm_wrapper import query_llm, stream_llm
 from services import apc_orchestrator
 from services.cpt_service import get_cpt_codes_for_topic
@@ -38,7 +38,7 @@ from services.utils import (
     save_chat_message,
 )
 from services.common import get_or_generate_cpt_description
-from services.final_assessment_service import create_excel_output, create_pdf_output
+from services.final_assessment_service import create_excel_output, create_pdf_output, generate_final_assessment
 
 app = FastAPI(title="CCV Research API", version="0.1.0")
 
@@ -74,30 +74,26 @@ async def generate_cpt(req: GenerateCptRequest):
     return await run_in_threadpool(get_cpt_codes_for_topic, req.topic, req.model)
 
 
-
-@app.post("/research/run-all", response_model=ResearchRunResult)
-async def run_all(req: RunAllRequest):
-    result = await run_in_threadpool(
-        apc_orchestrator.conduct_all_sections_research,
-        req.cpt,
-        req.context or "",
-        req.model,
-    )
-    return result
-
-
 SECTION_FUNCS = [
     analyze_code_descriptions,
     analyze_guideline_examination,
     analyze_payment_rate_comparison,
     analyze_device_code_analysis,
     analyze_ncci_compliance,
-    analyze_reference_material_review
+    analyze_reference_material_review,
+    generate_final_assessment,
 ]
 
 @app.post("/research/run/{section_id}")
 async def run_section(section_id:int,req: RunAllRequest):
-    result = SECTION_FUNCS[section_id](req.cpt, req.model, req.use_cache)
+    if(section_id == len(SECTION_FUNCS) - 1):
+        # Final Assessment
+        result = await run_in_threadpool(
+            SECTION_FUNCS[section_id],
+            req.cpt, req.use_cache
+        )
+        return result
+    result = await run_in_threadpool(SECTION_FUNCS[section_id], req.cpt, req.model, req.use_cache)
     return result
 
 

@@ -1,7 +1,7 @@
 import { AddServerMessageFunc, ChatProvider } from "@/components/chatContextProvider";
 import { FC } from "react";
 import {
-  addToChatSessionMessage,
+  addMessageToChatSession,
   getClientSession,
   getHighlightsForUser,
   getSessionNotes,
@@ -9,7 +9,8 @@ import {
 import { ChatData } from "@/lib/chat";
 import { ChatPage } from "./chatPage";
 import { redirect } from "next/navigation";
-import { verifySessionCookie } from "@/lib/session";
+import { getSessionToken } from "@/lib/session";
+import { runSection } from "@/lib/backendClient";
 
 interface Props {
   params: Promise<{ sessionId: string }>;
@@ -25,20 +26,36 @@ const Page: FC<Props> = async ({ params }) => {
     getSessionNotes(sessionId),
     getHighlightsForUser(sessionId),
   ]);
-  const addServerMessage: AddServerMessageFunc = async (message, sectionId) => {
+  const addServerMessage: AddServerMessageFunc = async (message, sessionId) => {
     "use server";
-    const userJwt = await verifySessionCookie();
-    return addToChatSessionMessage(userJwt.uid, sessionId, {
-      ...message,
-      chatId: sectionId,
-    });
+    const userJwt = await getSessionToken();
+    return addMessageToChatSession(userJwt.uid, sessionId, message);
   };
-  const initData: ChatData = sessionData.sections.map((section) => ({
-    messages: section.chat.messages,
-    chatId: section.chatId,
-    sectionId: String(section.id),
-    title: section.title,
-  }));
+
+  const initData: ChatData = sessionData.sections.map((section, i) => {
+    const fetchSection = async () => {
+      const resp = await runSection(i, {
+        cpt: sessionData.metadata.cpt,
+        model: sessionData.metadata.initialModel,
+        use_cache: true,
+        context: "",
+      });
+      if (resp.error) {
+        throw new Error(`Error fetching section data: ${resp.error}`);
+      }
+      const messages = await addMessageToChatSession(sessionData.userId, sessionId, {
+        content: JSON.stringify(resp.data),
+        role: "assistant",
+        sectionId: section.id,
+      });
+      return [messages];
+    };
+    return {
+      messages: section.messages.length > 0 ? section.messages : fetchSection(),
+      sectionId: section.id,
+      title: section.title,
+    };
+  });
 
   return (
     <ChatProvider initChatData={initData} addServerMessage={addServerMessage}>

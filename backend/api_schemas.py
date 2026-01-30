@@ -30,7 +30,6 @@ class RunAllRequest(BaseModel):
     cpt: str
     context: Optional[str] = ""
     model: str = Field(default="gpt-4.1-mini")
-    sections_to_run: Optional[List[int]] = None
     use_cache: bool = True
 
 

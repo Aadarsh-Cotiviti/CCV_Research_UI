@@ -1,34 +1,9 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9d201046-f403-4c53-b01e-3558df511d7c",
+  "id": "b9afd620-5469-40c6-8341-36a7bfc3f65e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
-    "chats": {
-      "name": "chats",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%s','now') * 1000)"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "general_feedback": {
       "name": "general_feedback",
       "columns": {
@@ -359,8 +334,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "chat_id": {
-          "name": "chat_id",
+        "section_id": {
+          "name": "section_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -411,21 +386,21 @@
         }
       },
       "indexes": {
-        "idx_messages_chat_id": {
-          "name": "idx_messages_chat_id",
+        "idx_messages_section_id": {
+          "name": "idx_messages_section_id",
           "columns": [
-            "chat_id"
+            "section_id"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "messages_chat_id_chats_id_fk": {
-          "name": "messages_chat_id_chats_id_fk",
+        "messages_section_id_sections_id_fk": {
+          "name": "messages_section_id_sections_id_fk",
           "tableFrom": "messages",
-          "tableTo": "chats",
+          "tableTo": "sections",
           "columnsFrom": [
-            "chat_id"
+            "section_id"
           ],
           "columnsTo": [
             "id"
@@ -456,20 +431,13 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "session_id": {
-          "name": "session_id",
           "type": "text",
-          "primaryKey": false,
+          "primaryKey": true,
           "notNull": true,
           "autoincrement": false
         },
-        "chat_id": {
-          "name": "chat_id",
+        "session_id": {
+          "name": "session_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -498,13 +466,6 @@
             "session_id"
           ],
           "isUnique": false
-        },
-        "idx_sections_chat_id": {
-          "name": "idx_sections_chat_id",
-          "columns": [
-            "chat_id"
-          ],
-          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -514,19 +475,6 @@
           "tableTo": "sessions",
           "columnsFrom": [
             "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "sections_chat_id_chats_id_fk": {
-          "name": "sections_chat_id_chats_id_fk",
-          "tableFrom": "sections",
-          "tableTo": "chats",
-          "columnsFrom": [
-            "chat_id"
           ],
           "columnsTo": [
             "id"
@@ -576,6 +524,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false,
+          "autoincrement": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
           "autoincrement": false
         },
         "created_at": {

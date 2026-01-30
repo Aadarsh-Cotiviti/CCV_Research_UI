@@ -1,10 +1,10 @@
 import { getAllFeedback, getAllUsersWithAccess } from "@/lib/db";
-import { getSessionPayloadFromCookie } from "@/lib/session";
+import { getUserSessionFromCookie } from "@/lib/session";
 import { redirect } from "next/navigation";
 import AdminFeedbackClient from "./pageClient";
 
 const AdminFeedbackPage = async () => {
-  const session = await getSessionPayloadFromCookie();
+  const session = await getUserSessionFromCookie();
   if (!session || session.isAdmin !== true) {
     redirect("/chat-research");
   }

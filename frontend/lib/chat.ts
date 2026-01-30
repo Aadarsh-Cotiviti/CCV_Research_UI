@@ -4,7 +4,6 @@ import { ClientSessionMessages } from "./db";
 
 export type ChatData = {
   sectionId: string;
-  chatId: string;
-  messages: ClientSessionMessages;
+  messages: Promise<ClientSessionMessages> | ClientSessionMessages;
   title?: string;
 }[];

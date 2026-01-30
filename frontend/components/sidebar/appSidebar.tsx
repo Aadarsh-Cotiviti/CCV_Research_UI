@@ -21,8 +21,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { Button } from "../ui/button";
 import { useEffect, useRef, useState } from "react";
 
-import Image from "next/image";
-
 import { DisplayChatHistory, DisplayChatHistoryLoading } from "./NavChatHistory";
 import { useProfileStore } from "../authComponents";
 import Link from "next/link";

@@ -55,7 +55,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/research/sections/{section_id}/run": {
+    "/research/run/{section_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -65,24 +65,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Run Section */
-        post: operations["run_section_research_sections__section_id__run_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/research/run-all": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Run All */
-        post: operations["run_all_research_run_all_post"];
+        post: operations["run_section_research_run__section_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -215,65 +198,6 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /** InternalLlmRecodingResult */
-        InternalLlmRecodingResult: {
-            /** Cpt Code */
-            cpt_code: string;
-            /** Description */
-            description: string;
-            /** Description Source */
-            description_source: string;
-            llm_recoding: components["schemas"]["LlmRecoding"];
-        };
-        /** LlmRecoding */
-        LlmRecoding: {
-            /** Recoding Possibilities */
-            recoding_possibilities: string;
-            /** Source */
-            source: string;
-        };
-        /** NeighbouringCode */
-        NeighbouringCode: {
-            /** Cpt Code */
-            cpt_code: string;
-            /** Description */
-            description: string;
-            /** Source */
-            source: string;
-        };
-        /** ResearchRunResult */
-        ResearchRunResult: {
-            /** Target Cpt */
-            target_cpt: string;
-            /** Context Details */
-            context_details: string;
-            /** Model */
-            model: string;
-            /** Sections */
-            sections: {
-                [key: string]: components["schemas"]["SectionSuccess"] | components["schemas"]["SectionError"];
-            };
-        };
-        /** ResearchSectionRunRequest */
-        ResearchSectionRunRequest: {
-            /** Cpt */
-            cpt: string;
-            /**
-             * Context
-             * @default
-             */
-            context: string | null;
-            /**
-             * Model
-             * @default gpt-4.1-mini
-             */
-            model: string;
-            /**
-             * Use Cache
-             * @default true
-             */
-            use_cache: boolean;
-        };
         /** RunAllRequest */
         RunAllRequest: {
             /** Cpt */
@@ -288,52 +212,11 @@ export interface components {
              * @default gpt-4.1-mini
              */
             model: string;
-            /** Sections To Run */
-            sections_to_run?: number[] | null;
             /**
              * Use Cache
              * @default true
              */
             use_cache: boolean;
-        };
-        /** Section1Data */
-        Section1Data: {
-            /** Neighbouring Codes */
-            neighbouring_codes: components["schemas"]["NeighbouringCode"][];
-            /** Internal Recoding Result */
-            internal_recoding_result: {
-                [key: string]: unknown;
-            }[];
-            /** Internal Llm Recoding Result */
-            internal_llm_recoding_result: components["schemas"]["InternalLlmRecodingResult"][];
-            /** External Full Llm Result */
-            external_full_llm_result: {
-                [key: string]: unknown;
-            }[];
-        };
-        /** SectionError */
-        SectionError: {
-            /** Section Num */
-            section_num: number;
-            /**
-             * Status
-             * @constant
-             */
-            status: "error";
-            /** Error */
-            error: string;
-        };
-        /** SectionSuccess */
-        SectionSuccess: {
-            /** Section Num */
-            section_num: number;
-            /**
-             * Status
-             * @constant
-             */
-            status: "success";
-            /** Data */
-            data: components["schemas"]["Section1Data"] | string;
         };
         /** ValidationError */
         ValidationError: {
@@ -440,46 +323,13 @@ export interface operations {
             };
         };
     };
-    run_section_research_sections__section_id__run_post: {
+    run_section_research_run__section_id__post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 section_id: number;
             };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResearchSectionRunRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    run_all_research_run_all_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
             cookie?: never;
         };
         requestBody: {
@@ -494,7 +344,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ResearchRunResult"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

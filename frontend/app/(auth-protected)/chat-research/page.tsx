@@ -2,7 +2,7 @@ import { ChatInputBox, SubmitHandler } from "@/components/chatInput";
 import { Item, ItemContent, ItemMedia, ItemTitle } from "@/components/ui/item";
 import type { MessageInsert } from "@/db/schemas";
 import { createChatSession } from "@/lib/db";
-import { verifySessionCookie } from "@/lib/session";
+import { getSessionToken } from "@/lib/session";
 import { SearchIcon } from "lucide-react";
 import { redirect } from "next/navigation";
 import { FC } from "react";
@@ -10,7 +10,7 @@ import { FC } from "react";
 const Page = () => {
   const onSubmit: SubmitHandler = async (input, model) => {
     "use server";
-    const jwtUserData = await verifySessionCookie();
+    const jwtUserData = await getSessionToken();
     const messages: Omit<MessageInsert, "chatId">[] = [
       {
         role: "system",

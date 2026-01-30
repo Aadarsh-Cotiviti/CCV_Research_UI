@@ -1,8 +1,3 @@
-CREATE TABLE `chats` (
-	`id` text PRIMARY KEY NOT NULL,
-	`created_at` integer DEFAULT (strftime('%s','now') * 1000) NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE `general_feedback` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
@@ -49,36 +44,34 @@ CREATE TABLE `message_feedback` (
 CREATE INDEX `idx_feedbacks_user_id` ON `message_feedback` (`user_id`);--> statement-breakpoint
 CREATE TABLE `messages` (
 	`id` text PRIMARY KEY NOT NULL,
-	`chat_id` text NOT NULL,
+	`section_id` text NOT NULL,
 	`role` text NOT NULL,
 	`content` text NOT NULL,
 	`model_used` text,
 	`documents` text,
 	`created_at` integer DEFAULT (strftime('%s','now') * 1000) NOT NULL,
 	`feedback_id` text,
-	FOREIGN KEY (`chat_id`) REFERENCES `chats`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`section_id`) REFERENCES `sections`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`feedback_id`) REFERENCES `message_feedback`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `idx_messages_chat_id` ON `messages` (`chat_id`);--> statement-breakpoint
+CREATE INDEX `idx_messages_section_id` ON `messages` (`section_id`);--> statement-breakpoint
 CREATE TABLE `sections` (
-	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`id` text PRIMARY KEY NOT NULL,
 	`session_id` text NOT NULL,
-	`chat_id` text NOT NULL,
 	`title` text NOT NULL,
 	`created_at` integer DEFAULT (strftime('%s','now') * 1000) NOT NULL,
-	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`chat_id`) REFERENCES `chats`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
 CREATE INDEX `idx_sections_session_id` ON `sections` (`session_id`);--> statement-breakpoint
-CREATE INDEX `idx_sections_chat_id` ON `sections` (`chat_id`);--> statement-breakpoint
 CREATE TABLE `sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
 	`type` text DEFAULT 'chat' NOT NULL,
 	`topic` text NOT NULL,
 	`notes` text,
+	`metadata` text NOT NULL,
 	`created_at` integer DEFAULT (strftime('%s','now') * 1000) NOT NULL,
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );

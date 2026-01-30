@@ -32,7 +32,7 @@ export const users = sqliteTable(
       .notNull()
       .default(sql`(strftime('%s','now') * 1000)`),
   },
-  (users) => [index("idx_users_okta_id").on(users.oktaId)]
+  (users) => [index("idx_users_okta_id").on(users.oktaId)],
 );
 
 export type User = typeof users.$inferSelect;
@@ -50,6 +50,7 @@ export const sessions = sqliteTable(
     type: text("type", { enum: sessionTypeValues }).notNull().default("chat"),
     topic: text("topic").notNull(),
     notes: text("notes", { mode: "json" }),
+    metadata: text("metadata", { mode: "json" }).$type<{ [key: string]: string }>().notNull(),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(strftime('%s','now') * 1000)`),
@@ -57,7 +58,7 @@ export const sessions = sqliteTable(
   (sessions) => [
     index("idx_sessions_user_id").on(sessions.userId),
     index("idx_sessions_type").on(sessions.type),
-  ]
+  ],
 );
 
 export type Session = typeof sessions.$inferSelect;
@@ -66,22 +67,18 @@ export type SessionInsert = typeof sessions.$inferInsert;
 export const sections = sqliteTable(
   "sections",
   {
-    id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
     sessionId: text("session_id")
       .notNull()
       .references(() => sessions.id, { onDelete: "cascade" }),
-    chatId: text("chat_id")
-      .notNull()
-      .references(() => chat.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(strftime('%s','now') * 1000)`),
   },
-  (sections) => [
-    index("idx_sections_session_id").on(sections.sessionId),
-    index("idx_sections_chat_id").on(sections.chatId),
-  ]
+  (sections) => [index("idx_sections_session_id").on(sections.sessionId)],
 );
 
 export type Section = typeof sections.$inferSelect;
@@ -92,9 +89,9 @@ export const sessionRelations = relations(sessions, ({ one, many }) => ({
   sections: many(sections),
 }));
 
-export const sectionRelations = relations(sections, ({ one }) => ({
+export const sectionRelations = relations(sections, ({ one, many }) => ({
   session: one(sessions, { fields: [sections.sessionId], references: [sessions.id] }),
-  chat: one(chat, { fields: [sections.chatId], references: [chat.id] }),
+  messages: many(messages),
 }));
 
 export const userRelations = relations(users, ({ many }) => ({
@@ -102,22 +99,6 @@ export const userRelations = relations(users, ({ many }) => ({
   messageFeedback: many(messageFeedback),
   generalFeedback: many(generalFeedback),
   highlightedText: many(highlightedText),
-}));
-
-export const chat = sqliteTable("chats", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => randomUUID()),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
-    .notNull()
-    .default(sql`(strftime('%s','now') * 1000)`),
-});
-
-export type Chat = typeof chat.$inferSelect;
-export type ChatInsert = typeof chat.$inferInsert;
-
-export const chatRelations = relations(chat, ({ many }) => ({
-  messages: many(messages),
 }));
 
 const messageRoleValues = ["user", "assistant", "system"] as const;
@@ -134,9 +115,9 @@ export const messages = sqliteTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => randomUUID()),
-    chatId: text("chat_id")
+    sectionId: text("section_id")
       .notNull()
-      .references(() => chat.id, { onDelete: "cascade" }),
+      .references(() => sections.id, { onDelete: "cascade" }),
     role: text("role", { enum: messageRoleValues }).notNull(),
     content: text("content").notNull(),
     modelUsed: text("model_used"),
@@ -148,14 +129,14 @@ export const messages = sqliteTable(
       onDelete: "cascade",
     }),
   },
-  (messages) => [index("idx_messages_chat_id").on(messages.chatId)]
+  (messages) => [index("idx_messages_section_id").on(messages.sectionId)],
 );
 
-export type Message = Omit<typeof messages.$inferSelect, "chatId">;
+export type Message = Omit<typeof messages.$inferSelect, "sectionId">;
 export type MessageInsert = typeof messages.$inferInsert;
 
 export const messageRelations = relations(messages, ({ one, many }) => ({
-  chat: one(chat, { fields: [messages.chatId], references: [chat.id] }),
+  section: one(sections, { fields: [messages.sectionId], references: [sections.id] }),
   feedback: one(messageFeedback, {
     fields: [messages.feedbackId],
     references: [messageFeedback.id],
@@ -181,7 +162,7 @@ export const messageFeedback = sqliteTable(
       .notNull()
       .default(sql`(strftime('%s','now') * 1000)`),
   },
-  (feedback) => [index("idx_feedbacks_user_id").on(feedback.userId)]
+  (feedback) => [index("idx_feedbacks_user_id").on(feedback.userId)],
 );
 
 export type MessageFeedback = typeof messageFeedback.$inferSelect;
@@ -223,7 +204,7 @@ export const highlightedText = sqliteTable(
     index("idx_highlighted_text_user_id").on(highlightedText.userId),
     index("idx_highlighted_text_session_id").on(highlightedText.sessionId),
     index("idx_highlighted_text_message_id").on(highlightedText.messageId),
-  ]
+  ],
 );
 
 export type HighlightedText = typeof highlightedText.$inferSelect;
@@ -251,7 +232,7 @@ export const generalFeedback = sqliteTable(
       .notNull()
       .default(sql`(strftime('%s','now') * 1000)`),
   },
-  (feedback) => [index("idx_general_feedback_user_id").on(feedback.userId)]
+  (feedback) => [index("idx_general_feedback_user_id").on(feedback.userId)],
 );
 
 export type GeneralFeedback = typeof generalFeedback.$inferSelect;

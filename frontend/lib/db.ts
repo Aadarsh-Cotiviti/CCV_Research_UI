@@ -5,7 +5,6 @@ import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import * as schemas from "../db/schemas";
 import { and, desc, eq, inArray, not, sql } from "drizzle-orm";
-import { ResearchSections } from "@/app/(auth-protected)/apc-research/server-actions";
 import { ChatNavLinks } from "@/app/api/[[...route]]/_authRoutes";
 
 const dbUrl = pathToFileURL(path.join(process.cwd(), process.env.DB_URL!)).href;
@@ -40,16 +39,12 @@ export const getClientSession = async (sessionId: string) => {
     with: {
       sections: {
         with: {
-          chat: {
+          messages: {
             with: {
-              messages: {
-                with: {
-                  feedback: true,
-                },
-                where: not(eq(schemas.messages.role, "system")),
-                orderBy: (messages, { asc }) => [asc(messages.createdAt)],
-              },
+              feedback: true,
             },
+            where: not(eq(schemas.messages.role, "system")),
+            orderBy: (messages, { asc }) => [asc(messages.createdAt)],
           },
         },
       },
@@ -59,8 +54,7 @@ export const getClientSession = async (sessionId: string) => {
 
 export type ClientSession = Awaited<ReturnType<typeof getClientSession>>;
 
-export type ClientSessionMessages =
-  NonNullable<ClientSession>["sections"][number]["chat"]["messages"];
+export type ClientSessionMessages = NonNullable<ClientSession>["sections"][number]["messages"];
 
 export type ClientSessionMessage = ClientSessionMessages[number];
 
@@ -70,18 +64,14 @@ export const getChatSession = async (uid: string, sessionId: string, limit?: num
     with: {
       sections: {
         with: {
-          chat: {
-            with: {
-              messages: {
-                columns: {
-                  content: true,
-                  modelUsed: true,
-                  role: true,
-                },
-                orderBy: (messages, { asc }) => [asc(messages.createdAt)],
-                limit,
-              },
+          messages: {
+            columns: {
+              content: true,
+              modelUsed: true,
+              role: true,
             },
+            orderBy: (messages, { asc }) => [asc(messages.createdAt)],
+            limit,
           },
         },
       },
@@ -105,32 +95,32 @@ export const createChatSession = async (
     const topic = userMsg.content.substring(0, maxMsgLength);
     const [session] = await tx
       .insert(schemas.sessions)
-      .values({ userId, type: "chat", topic })
+      .values({ userId, type: "chat", topic, metadata: {} })
       .returning();
-
-    const [chat] = await tx.insert(schemas.chat).values({}).returning();
+    const [section] = await tx
+      .insert(schemas.sections)
+      .values({ sessionId: session.id, title: topic })
+      .returning();
     const insertMsg: schemas.MessageInsert[] = messages.map((msg) => ({
-      chatId: chat.id,
+      sectionId: section.id,
       role: msg.role,
       content: msg.content,
       modelUsed: msg.modelUsed,
     }));
     await tx.insert(schemas.messages).values(insertMsg);
-    await tx
-      .insert(schemas.sections)
-      .values({ sessionId: session.id, chatId: chat.id, title: topic });
+
     return session;
   });
 };
 
-export const addToChatSessionMessage = async (
+export const addMessageToChatSession = async (
   uid: string,
-  chatSessionId: string,
+  sessionId: string,
   newMessage: schemas.MessageInsert,
-) => {
+): Promise<ClientSessionMessage> => {
   return db.transaction(async (tx) => {
     const session = await tx.query.sessions.findFirst({
-      where: () => eq(schemas.sessions.id, chatSessionId),
+      where: () => eq(schemas.sessions.id, sessionId),
       with: {
         user: true,
         sections: true,
@@ -139,24 +129,26 @@ export const addToChatSessionMessage = async (
     if (!session) throw new Error("Chat does not exist");
     if (session.user.id !== uid) throw new Error("Unauthorized");
 
-    const targetSection =
-      session.sections.find((section) => section.chatId === newMessage.chatId) ||
-      session.sections[0];
+    const targetSection = session.sections.find((section) => section.id === newMessage.sectionId);
     if (!targetSection) throw new Error("No chat section found for session");
     const [msg] = await tx
       .insert(schemas.messages)
       .values({
-        chatId: targetSection.chatId,
+        sectionId: targetSection.id,
         content: newMessage.content,
         role: newMessage.role,
         modelUsed: newMessage.modelUsed,
       })
       .returning();
-    return msg;
+    return {
+      ...msg,
+      feedback: null,
+    };
   });
 };
 
 export const updateChatMessageContent = async (messageId: string, newContent: string) => {
+  console.log(`Updating message ${messageId} content to:`, newContent);
   return db.transaction(async (tx) => {
     await tx
       .update(schemas.messages)
@@ -193,40 +185,6 @@ export const submitFeedback = async (
   return feedback;
 };
 
-export const addToResearchSessionChat = async (
-  oktaId: string,
-  researchSessionId: string,
-  researchSectionId: number,
-  newMessage: schemas.MessageInsert,
-) => {
-  await db.transaction(async (tx) => {
-    const researchSession = await tx.query.sessions.findFirst({
-      where: () => eq(schemas.sessions.id, researchSessionId),
-      with: {
-        user: true,
-      },
-    });
-    if (researchSession === undefined || researchSession.type !== "apc")
-      throw new Error("Research Session does not exist");
-    if (researchSession.user.oktaId !== oktaId) throw new Error("Unauthorized");
-
-    const researchSection = await tx.query.sections.findFirst({
-      where: () =>
-        and(
-          eq(schemas.sections.id, researchSectionId),
-          eq(schemas.sections.sessionId, researchSessionId),
-        ),
-    });
-    if (researchSection === undefined) throw new Error("Research Section does not exist");
-    await tx.insert(schemas.messages).values({
-      chatId: researchSection.chatId,
-      content: newMessage.content,
-      role: newMessage.role,
-      modelUsed: newMessage.modelUsed,
-    });
-  });
-};
-
 const TITLES = [
   "Section 1: Code Description Analysis",
   "Section 2: Guideline Examination",
@@ -237,67 +195,27 @@ const TITLES = [
   "Final Assessment",
 ];
 
-export const createResearchSession = async (
-  userId: string,
-  topic: string,
-  sections: ResearchSections,
-  modelUsed: string,
-) => {
-  const sectionArr = Object.values(sections);
+export const createResearchSession = async (userId: string, cpt: string, modelUsed: string) => {
+  const NUM_OF_SECTIONS = TITLES.length;
   return await db.transaction(async (tx) => {
-    console.log("Creating research session for userId:", userId, "with topic:", topic);
+    const metadata = {
+      cpt,
+      initialModel: modelUsed,
+    };
     const [researchSession] = await tx
       .insert(schemas.sessions)
-      .values({ userId, topic, type: "apc" })
+      .values({ userId, topic: cpt, type: "apc", metadata })
       .returning();
-    console.log("Created research session for userId:", userId, "with topic:", topic);
-    const chats = await tx
-      .insert(schemas.chat)
-      .values(sectionArr.map(() => ({})))
-      .returning();
-    console.log("Created chats for research session:", chats);
-    const sectionChats: schemas.MessageInsert[] = chats.map((chat, i) => {
-      const section = sectionArr[i];
-      if (section.status === "success") {
-        return {
-          chatId: chat.id,
-          content: typeof section.data === "string" ? section.data : JSON.stringify(section.data),
-          role: "assistant",
-          modelUsed,
-        };
-      } else {
-        return {
-          chatId: chat.id,
-          content: `Error generating section: ${section.error || "Unknown error"}`,
-          role: "assistant",
-          modelUsed,
-        };
-      }
-    });
-    console.log("Inserting section chats:", sectionChats);
-    const [] = await tx.insert(schemas.messages).values(sectionChats).returning();
-    const researchSectionData: schemas.SectionInsert[] = sectionArr.map((section, i) => ({
-      sessionId: researchSession.id,
-      chatId: chats[i].id,
-      title: TITLES[i],
-    }));
-    console.log("Inserting research sections:", researchSectionData);
-    const [] = await tx.insert(schemas.sections).values(researchSectionData).returning();
-
+    console.log("Created research session for userId:", userId, "with topic:", cpt);
+    const researchSectionData: schemas.SectionInsert[] = Array.from(
+      { length: NUM_OF_SECTIONS },
+      (_, i) => ({
+        sessionId: researchSession.id,
+        title: TITLES[i],
+      }),
+    );
+    await tx.insert(schemas.sections).values(researchSectionData).returning();
     return researchSession;
-  });
-};
-
-export const getResearchSections = async (researchSessionId: string) => {
-  return await db.query.sections.findMany({
-    where: eq(schemas.sections.sessionId, researchSessionId),
-    with: {
-      chat: {
-        with: {
-          messages: true,
-        },
-      },
-    },
   });
 };
 
@@ -427,7 +345,6 @@ export const deleteChatSession = async (
         sections: {
           columns: {
             id: true,
-            chatId: true,
           },
         },
       },
@@ -436,12 +353,11 @@ export const deleteChatSession = async (
     if (!session) throw new Error(`${chatType === "chat" ? "Chat" : "Research"} session not found`);
     if (session.user.oktaId !== oktaId) throw new Error("Unauthorized");
 
-    const chatIds = session.sections.map((section) => section.chatId);
+    const sectionIds = session.sections.map((section) => section.id);
 
-    if (chatIds.length > 0) {
-      await tx.delete(schemas.messages).where(inArray(schemas.messages.chatId, chatIds));
+    if (sectionIds.length > 0) {
+      await tx.delete(schemas.messages).where(inArray(schemas.messages.sectionId, sectionIds));
       await tx.delete(schemas.sections).where(eq(schemas.sections.sessionId, chatId));
-      await tx.delete(schemas.chat).where(inArray(schemas.chat.id, chatIds));
     } else {
       await tx.delete(schemas.sections).where(eq(schemas.sections.sessionId, chatId));
     }
@@ -631,7 +547,7 @@ export const getAllFeedback = async () => {
     .from(schemas.messageFeedback)
     .leftJoin(schemas.users, eq(schemas.messageFeedback.userId, schemas.users.id))
     .leftJoin(schemas.messages, eq(schemas.messages.feedbackId, schemas.messageFeedback.id))
-    .leftJoin(schemas.sections, eq(schemas.sections.chatId, schemas.messages.chatId))
+    .leftJoin(schemas.sections, eq(schemas.sections.id, schemas.messages.sectionId))
     .leftJoin(schemas.sessions, eq(schemas.sessions.id, schemas.sections.sessionId))
     .orderBy(desc(schemas.messageFeedback.createdAt));
 

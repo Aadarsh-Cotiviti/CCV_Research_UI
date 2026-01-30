@@ -1,12 +1,7 @@
 import { permanentRedirect } from "next/navigation";
 
-
 export default function Home() {
+  permanentRedirect("/chat-research");
 
-  permanentRedirect("/chat-research")
-
-  return (
-    <div></div>
-  );
+  return <div></div>;
 }
-

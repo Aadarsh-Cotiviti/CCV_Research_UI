@@ -18,7 +18,7 @@ interface TextHighlightingContextType {
     messageContent: string,
     messageId: string,
     sessionId: string,
-    sectionId?: number
+    sectionId?: number,
   ) => void;
   clearSelection: () => void;
   quoteInChat: (text: string) => void;
@@ -39,7 +39,7 @@ export const TextHighlightingProvider = ({
   onQuoteInChat,
 }: TextHighlightingProviderProps) => {
   const textHighlighting = useTextHighlighting(initHighlightedText);
-  const { setSelectedSection, currentSection } = useChatContext();
+  const { setSelectedSection, currentSectionId: currentSection } = useChatContext();
 
   const navigateToHighlight = (highlight: HighlightedText) => {
     // If the highlight belongs to a different section, switch first so the message is present

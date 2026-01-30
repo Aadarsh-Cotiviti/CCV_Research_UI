@@ -31,7 +31,7 @@ type ChatDisplayProps = {
 };
 
 export const ChatDisplay: FC<ChatDisplayProps> = ({ assistantRenderers }) => {
-  const { currentMessages, aiResponse, loading, currentSection, chatData } = useChatContext();
+  const { currentMessages, state, currentSectionId: currentSection, chatData } = useChatContext();
   const {
     isSelectionMenuOpen,
     currentSelection,
@@ -58,10 +58,10 @@ export const ChatDisplay: FC<ChatDisplayProps> = ({ assistantRenderers }) => {
     await saveHighlight(selection, notes);
   };
 
-  const renderAssistant = (message: ClientSessionMessage) => {
+  const RenderAssistant = ({ message }: { message: ClientSessionMessage }) => {
     const Renderer = selectionIndex >= 0 ? assistantRenderers?.[selectionIndex] : undefined;
     if (!Renderer) {
-      return <DefaultAssistantRender data={message} />;
+      return <DefaultAssistantRender msg={message} />;
     }
     return (
       <AssistantSelectionWrapper message={message}>
@@ -81,33 +81,16 @@ export const ChatDisplay: FC<ChatDisplayProps> = ({ assistantRenderers }) => {
               <UserMessage data={message} />
             </div>
           ) : index === 0 ? (
-            renderAssistant(message)
+            <RenderAssistant message={message} key={message.id} />
           ) : (
-            <DefaultAssistantRender data={message} />
+            <DefaultAssistantRender msg={message} key={message.id} />
           );
         })}
-        {loading && aiResponse === "" && (
+        {state === "loading" && (
           <div className="flex gap-2 mt-4">
             <div className="animate-bounce size-4 bg-accent rounded-full"></div>
             <div className="animate-bounce delay-[150ms] size-4 bg-accent rounded-full"></div>
             <div className="animate-bounce delay-[300ms] size-4 bg-accent rounded-full"></div>
-          </div>
-        )}
-        {aiResponse && (
-          <div>
-            <DefaultAssistantRender
-              data={{
-                content: aiResponse,
-                createdAt: new Date(),
-                documents: null,
-                id: crypto.randomUUID(),
-                modelUsed: "",
-                role: "assistant",
-                chatId: "",
-                feedback: null,
-                feedbackId: null,
-              }}
-            />
           </div>
         )}
       </div>
@@ -133,17 +116,16 @@ const Icon = ({ children }: { children: ReactNode }) => {
   );
 };
 
-const DefaultAssistantRender = ({ data }: { data: ClientSessionMessage }) => {
-  const documents = data.documents;
-
+const DefaultAssistantRender = ({ msg }: { msg: ClientSessionMessage }) => {
+  const documents = msg.documents;
   return (
-    <AssistantSelectionWrapper message={data}>
+    <AssistantSelectionWrapper message={msg}>
       <div className="px-0 rounded-sm select-text cursor-text">
         <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-          {data.content}
+          {msg.content}
         </Markdown>
       </div>
-      <ChatFeedback feedback={data.feedback} messageId={data.id} />
+      {msg.content && <ChatFeedback feedback={msg.feedback} messageId={msg.id} />}
       {documents && (
         <div>
           <span className="mb-2 flex gap-2 items-center text-sm text-muted-foreground">
@@ -179,28 +161,27 @@ const UserMessage = ({ data }: { data: ClientSessionMessage }) => {
 
 interface SectionSelectorProps {
   children: ReactNode;
-  assistantRenderers?: AssistantRenderer[];
+  initialPageRender?: AssistantRenderer[];
 }
 
-export const SectionTabDisplay: FC<SectionSelectorProps> = ({ children, assistantRenderers }) => {
-  const { currentSection: selectedSection, setSelectedSection, chatData } = useChatContext();
+export const SectionTabDisplay: FC<SectionSelectorProps> = ({ children, initialPageRender }) => {
+  const { currentSectionId: selectedSection, setSelectedSection, chatData } = useChatContext();
   const renderedChildren = React.Children.map(children, (child) => {
     if (!React.isValidElement(child)) return child;
     if (child.type === ChatDisplay) {
       return React.cloneElement(child as React.ReactElement<ChatDisplayProps>, {
-        assistantRenderers,
+        assistantRenderers: initialPageRender,
       });
     }
     return child;
   });
-
   return (
     <div className="flex flex-1 flex-col size-full overflow-y-auto">
-      <div className="w-full gap-2 grid grid-cols-6 py-4 max-w-5xl mx-auto">
+      <div className={`flex w-full gap-2 py-4 max-w-5xl mx-auto`}>
         {chatData.map((data) => (
           <div
             key={data.sectionId}
-            className={cn("px-4 py-4 text-center text-xs cursor-pointer hover:bg-muted", {
+            className={cn("flex-1 px-4 py-4 text-center text-xs cursor-pointer hover:bg-muted", {
               "border-b-2": data.sectionId === selectedSection,
             })}
             onClick={() => setSelectedSection(data.sectionId)}
@@ -220,7 +201,7 @@ export const AssistantSelectionWrapper: FC<AssistantSelectionWrapperProps> = ({
 }) => {
   const { handleTextSelection } = useTextHighlightingContext();
   const { sessionId } = useParams<{ sessionId: string }>();
-  const { currentSection } = useChatContext();
+  const { currentSectionId: currentSection } = useChatContext();
 
   const sectionNumeric = Number(currentSection);
   const sectionId = Number.isFinite(sectionNumeric) ? sectionNumeric : undefined;

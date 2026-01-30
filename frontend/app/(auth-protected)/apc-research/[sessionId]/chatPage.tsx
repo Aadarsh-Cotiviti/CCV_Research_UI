@@ -30,7 +30,7 @@ export const ChatPage: FC<Props> = ({ initNotes, initHighlightedText }) => {
       initHighlightedText={initHighlightedText}
     >
       <NotePadWrapper initNotes={initNotes}>
-        <SectionTabDisplay assistantRenderers={sectionRenders}>
+        <SectionTabDisplay initialPageRender={sectionRenders}>
           <ChatDisplay />
         </SectionTabDisplay>
         <div className="py-4 border-t-2 px-8">

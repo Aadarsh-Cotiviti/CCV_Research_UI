@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { getCookie, setCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 import { getUserData, type UserWithAccess } from "./db";
-
+import { cache } from "react";
 export const SESSION_COOKIE_NAME = "session";
 export const SESSION_TOKEN_AUD = "cotiviti-search-session";
 export const SESSION_TOKEN_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
@@ -64,7 +64,7 @@ export const verifySessionToken = async (jwt: string): Promise<SessionTokenPaylo
   return { ...(payload as SessionTokenPayload), isAdmin: normalizedAdmin };
 };
 
-export const verifySessionCookie = async () => {
+export const getSessionToken = async () => {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   if (!token) {
     throw new Error("Unauthorized");
@@ -72,16 +72,21 @@ export const verifySessionCookie = async () => {
   return verifySessionToken(token);
 };
 
-export const getSessionPayloadFromCookie = async (): Promise<SessionTokenPayload | null> => {
+export const getUserSessionFromCookie = cache(async () => {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   if (!token) {
     return null;
   }
+  const payload = await verifySessionToken(token);
   try {
-    return await verifySessionToken(token);
+    return await getUserData(payload.uid);
   } catch {
     return null;
   }
+});
+
+export const removeSession = async () => {
+  (await cookies()).delete(SESSION_COOKIE_NAME);
 };
 
 export const obtainUserData = createMiddleware<UserAuthEnv>(async (c, next) => {

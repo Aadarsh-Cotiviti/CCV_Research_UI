@@ -1,6 +1,6 @@
 import { FC } from "react";
 import {
-  addToChatSessionMessage,
+  addMessageToChatSession,
   getClientSession,
   getHighlightsForUser,
   getSessionNotes,
@@ -9,7 +9,7 @@ import { ChatData } from "@/lib/chat";
 import { redirect } from "next/navigation";
 import { ChatPage } from "./chatPage";
 import { AddServerMessageFunc, ChatProvider } from "@/components/chatContextProvider";
-import { verifySessionCookie } from "@/lib/session";
+import { getSessionToken } from "@/lib/session";
 
 interface Props {
   params: Promise<{ sessionId: string }>;
@@ -32,8 +32,7 @@ const Page: FC<Props> = async ({ params }) => {
   }
   const chatdata: ChatData = [
     {
-      messages: primarySection.chat.messages,
-      chatId: primarySection.chatId,
+      messages: primarySection.messages,
       sectionId: String(primarySection.id),
     },
   ];
@@ -41,10 +40,10 @@ const Page: FC<Props> = async ({ params }) => {
   const addMessage: AddServerMessageFunc = async (message, currentSectionId) => {
     "use server";
 
-    const userJwt = await verifySessionCookie();
-    return addToChatSessionMessage(userJwt.uid, sessionId, {
+    const userJwt = await getSessionToken();
+    return addMessageToChatSession(userJwt.uid, sessionId, {
       ...message,
-      chatId: currentSectionId,
+      sectionId: currentSectionId,
     });
   };
 

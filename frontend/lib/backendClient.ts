@@ -4,7 +4,6 @@ import type { components, paths } from "./api-types";
 const apiBase = process.env.BACKEND_API_URL || "http://localhost:8000";
 
 export type GenerateCptRequest = components["schemas"]["GenerateCptRequest"];
-export type ResearchSectionRunRequest = components["schemas"]["ResearchSectionRunRequest"];
 export type RunAllRequest = components["schemas"]["RunAllRequest"];
 export type ChatRequest = components["schemas"]["ChatRequest"];
 export type ApcChatRequest = components["schemas"]["ApcChatRequest"];
@@ -25,26 +24,13 @@ export const generateCpts = (
 };
 
 // --------- Research runs ---------
-export const runSection = (sectionId: number, payload: ResearchSectionRunRequest) =>
-  client.POST("/research/sections/{section_id}/run", {
+export const runSection = (sectionId: number, payload: RunAllRequest) =>
+  client.POST("/research/run/{section_id}", {
     params: { path: { section_id: sectionId } },
     body: payload,
   });
-
-export const runAllSections = (payload: RunAllRequest) =>
-  client.POST("/research/run-all", { body: payload });
-
-export const getSection1Cache = (cpt: string) =>
-  fetch(`${apiBase}/research/sections/1/cached?cpt=${encodeURIComponent(cpt)}`, {
-    cache: "no-store",
-  }).then(async (res) => {
-    if (!res.ok)
-      throw new Error(`API /research/sections/1/cached failed: ${res.status} ${await res.text()}`);
-    return res.json();
-  });
-
 // --------- Chat per section ---------
-export const sendSectionChat = (sectionId: string, payload: ApcChatRequest) =>
+export const sendSectionChat = (payload: ApcChatRequest) =>
   client.POST("/research/sections/chat", {
     body: payload,
   });
@@ -62,3 +48,6 @@ export const fetchExcel = (sessionId: string) =>
 
 export const fetchPdf = (sessionId: string) =>
   apiBuffer(`/export/pdf?session_id=${encodeURIComponent(sessionId)}`);
+
+// --------- Health ---------
+export const health = () => client.GET("/health");

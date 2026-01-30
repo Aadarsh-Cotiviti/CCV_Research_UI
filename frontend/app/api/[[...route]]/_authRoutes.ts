@@ -1,13 +1,13 @@
 import type { Context } from "hono";
 import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { createResearch, fetchCptCodes } from "@/app/(auth-protected)/apc-research/server-actions";
+import { fetchCptCodes } from "@/app/(auth-protected)/apc-research/server-actions";
 import { FeedbackType, UserRole } from "@/db/schemas";
-import { streamText } from "hono/streaming";
+import { streamSSE } from "hono/streaming";
 import { ResponsesModel } from "openai/resources/shared.mjs";
 import { AVAILABLE_MODELS, queryllmStream } from "@/lib/llm";
 import {
-  addToChatSessionMessage,
+  addMessageToChatSession,
   getUserChatHistory,
   getChatSession,
   updateChatTopic,
@@ -52,30 +52,28 @@ const requireAdmin = (c: Context<UserAuthEnv>) => {
   return null;
 };
 
-interface ChatBodyRequest {
-  sessionId: string;
-}
-
 app.use(obtainUserData);
-app.post("/chat", async (c) => {
+app.get("/chat/:sessionId/:sectionId", async (c) => {
   try {
-    const data = await c.req.json();
-    const { sessionId } = data as ChatBodyRequest;
-    console.log(`Received chat request for sessionId: ${sessionId}`);
+    const sessionId = c.req.param("sessionId");
+    const sectionId = c.req.param("sectionId");
+    console.log(`Received chat request for sessionId: ${sessionId}, sectionId: ${sectionId}`);
     const chatSession = await getChatSession(c.var.user.id, sessionId);
     if (!chatSession) {
       return jsonError(c, 404, "Chat session not found", "not_found");
     }
-    const primarySection = chatSession.sections[0];
-    if (!primarySection) {
+    console.log(chatSession.sections);
+    const section = chatSession.sections.find((section) => section.id === sectionId);
+    if (!section) {
       return jsonError(c, 400, "No sections found for session", "bad_request");
     }
 
-    const ctx = primarySection.chat.messages.map((msg) => ({
+    const ctx = section.messages.map((msg) => ({
       role: msg.role,
       content: msg.content,
     }));
-    const lastMsg = primarySection.chat.messages.at(-1);
+    const lastMsg = section.messages.at(-1);
+    console.log("Last message:", lastMsg);
     if (!lastMsg) {
       return jsonError(c, 400, "No messages in chat session", "bad_request");
     }
@@ -90,33 +88,37 @@ app.post("/chat", async (c) => {
     const reader = responseStream.getReader();
     const decoder = new TextDecoder();
 
-    const newMsg = await addToChatSessionMessage(c.var.user.id, sessionId, {
+    const newMsg = await addMessageToChatSession(c.var.user.id, sessionId, {
       role: "assistant",
       content: "",
       modelUsed: model,
-      chatId: primarySection.chatId,
+      sectionId: section.id,
     });
-    return streamText(c, async (stream) => {
+    return streamSSE(c, async (stream) => {
       let finalText = "";
-
+      // Send the message ID as metadata event
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         const chunkText = decoder.decode(value, { stream: true });
         if (!chunkText) continue;
-
-        finalText += chunkText;
-        // Forward chunk as SSE data event to the client
-        await stream.write(`data: ${JSON.stringify({ type: "content", content: chunkText })}\n\n`);
+        if (finalText === "") {
+          finalText += chunkText;
+          newMsg.content = finalText;
+          stream.writeSSE({ event: "begin", data: JSON.stringify(newMsg), id: newMsg.id });
+        } else {
+          finalText += chunkText;
+          stream.writeSSE({
+            event: "data",
+            data: finalText,
+            id: newMsg.id,
+          });
+        }
       }
+      stream.writeSSE({ event: "done", data: "[DONE]", id: newMsg.id });
 
       await updateChatMessageContent(newMsg.id, finalText);
-
-      // Send the message ID as metadata event
-      await stream.write(
-        `data: ${JSON.stringify({ type: "messageId", messageId: newMsg.id })}\n\n`,
-      );
     });
   } catch (error) {
     console.error("Error handling chat request:", error);
@@ -182,8 +184,7 @@ app.post("/create-research", async (c) => {
       contextDetails: string;
       model: ResponsesModel;
     }>();
-    const sections = await createResearch(targetCpt, contextDetails, model);
-    const session = await createResearchSession(c.var.user.id, targetCpt, sections.sections, model);
+    const session = await createResearchSession(c.var.user.id, targetCpt, model);
     console.log(session, "Created research session");
     return c.json({ id: session.id });
   } catch (error) {
