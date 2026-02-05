@@ -72,7 +72,7 @@ export const ChatDisplay: FC<ChatDisplayProps> = ({ assistantRenderers }) => {
 
   return (
     <div className="flex-1 p-8 overflow-y-auto">
-      <div className="mx-auto flex flex-col items-start max-w-4xl">
+      <div className="mx-auto flex flex-col items-start max-w-5xl">
         {currentMessages.map((message, index) => {
           const isLastUserMessage = message.role === "user" && index === currentMessages.length - 1;
 
@@ -87,7 +87,7 @@ export const ChatDisplay: FC<ChatDisplayProps> = ({ assistantRenderers }) => {
           );
         })}
         {state === "loading" && (
-          <div className="flex gap-2 mt-4">
+          <div className="flex gap-2 m-4 w-full justify-center">
             <div className="animate-bounce size-4 bg-accent rounded-full"></div>
             <div className="animate-bounce delay-[150ms] size-4 bg-accent rounded-full"></div>
             <div className="animate-bounce delay-[300ms] size-4 bg-accent rounded-full"></div>

@@ -20,8 +20,8 @@ from api_schemas import (
     GenerateCptRequest,
     RunAllRequest,
     CptCodeResult,
-    ResearchRunResult,
-    ChatRequest
+    ChatRequest,
+    SectionResponse,
 )
 from services.code_description_service import analyze_code_descriptions
 from services.device_code_service import analyze_device_code_analysis
@@ -84,7 +84,7 @@ SECTION_FUNCS = [
     generate_final_assessment,
 ]
 
-@app.post("/research/run/{section_id}")
+@app.post("/research/run/{section_id}", response_model=SectionResponse)
 async def run_section(section_id:int,req: RunAllRequest):
     if(section_id == len(SECTION_FUNCS) - 1):
         # Final Assessment

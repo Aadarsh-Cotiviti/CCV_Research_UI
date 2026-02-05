@@ -2,7 +2,7 @@
 
 import { useChatContext } from "@/components/chatContextProvider";
 import { ChatDisplay, SectionTabDisplay } from "@/components/chatDisplay";
-import { ChatInputBox } from "@/components/chatInput";
+import { ChatInputBox, ChatInputDisplay } from "@/components/chatInput";
 import { NotePadWrapper } from "@/components/notesPad";
 import { TextHighlightingProvider } from "@/components/textHighlightingProvider";
 import { HighlightedText } from "@/db/schemas";
@@ -22,43 +22,17 @@ export const ChatPage: FC<Props> = ({ initNotes, initHighlightedText }) => {
     setQuotedText(formattedQuote);
   };
 
-  const sectionRenders = sectionRenderers;
-
   return (
     <TextHighlightingProvider
       onQuoteInChat={handleQuoteInChat}
       initHighlightedText={initHighlightedText}
     >
       <NotePadWrapper initNotes={initNotes}>
-        <SectionTabDisplay initialPageRender={sectionRenders}>
+        <SectionTabDisplay initialPageRender={sectionRenderers}>
           <ChatDisplay />
         </SectionTabDisplay>
-        <div className="py-4 border-t-2 px-8">
-          <div className="max-w-4xl mx-auto">
-            <ChatInputDisplay quotedText={quotedText} onQuotedTextChange={setQuotedText} />
-          </div>
-        </div>
+        <ChatInputDisplay quotedText={quotedText} onQuotedTextChange={setQuotedText} />
       </NotePadWrapper>
     </TextHighlightingProvider>
-  );
-};
-
-const ChatInputDisplay = ({
-  quotedText,
-  onQuotedTextChange,
-}: {
-  quotedText: string;
-  onQuotedTextChange: (text: string) => void;
-}) => {
-  const { onChatSubmit } = useChatContext();
-
-  return (
-    <ChatInputBox
-      onSubmit={onChatSubmit}
-      useIconButton
-      placeholder="Ask another question"
-      initialValue={quotedText}
-      onValueChange={onQuotedTextChange}
-    />
   );
 };

@@ -1,7 +1,7 @@
 "use client";
 import { useChatContext } from "@/components/chatContextProvider";
 import { ChatDisplay } from "@/components/chatDisplay";
-import { ChatInputBox } from "@/components/chatInput";
+import { ChatInputBox, ChatInputDisplay } from "@/components/chatInput";
 import { FC, useState } from "react";
 import { TextHighlightingProvider } from "@/components/textHighlightingProvider";
 import { NotePadWrapper } from "@/components/notesPad";
@@ -26,32 +26,8 @@ export const ChatPage: FC<Props> = ({ initNotes, initHighlightedText }) => {
     >
       <NotePadWrapper initNotes={initNotes}>
         <ChatDisplay />
-        <div className="py-4 border-t-2 px-8">
-          <div className="max-w-4xl mx-auto">
-            <ChatInputDisplay quotedText={quotedText} onQuotedTextChange={setQuotedText} />
-          </div>
-        </div>
+        <ChatInputDisplay quotedText={quotedText} onQuotedTextChange={setQuotedText} />
       </NotePadWrapper>
     </TextHighlightingProvider>
-  );
-};
-
-const ChatInputDisplay = ({
-  quotedText,
-  onQuotedTextChange,
-}: {
-  quotedText: string;
-  onQuotedTextChange: (text: string) => void;
-}) => {
-  const { onChatSubmit } = useChatContext();
-
-  return (
-    <ChatInputBox
-      onSubmit={onChatSubmit}
-      useIconButton
-      placeholder="Ask another question"
-      initialValue={quotedText}
-      onValueChange={onQuotedTextChange}
-    />
   );
 };

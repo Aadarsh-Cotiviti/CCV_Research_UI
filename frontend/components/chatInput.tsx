@@ -20,6 +20,7 @@ import { Spinner } from "./ui/spinner";
 import { ResponsesModel } from "openai/resources/shared.mjs";
 import { AVAILABLE_MODELS } from "@/lib/llm";
 import { useProfileStore } from "./authComponents";
+import { useChatContext } from "./chatContextProvider";
 
 export type SubmitHandler = (content: string, model: ResponsesModel) => Promise<void>;
 
@@ -75,8 +76,10 @@ export const ChatInputBox: FC<ChatInputProps> = ({
   const Icon = loading ? Spinner : SendIcon;
 
   return (
-    <div className={cn("flex-1 flex flex-col gap-1 text-left shrink-0", className)}>
-      <InputGroup className="flex-1">
+    <div
+      className={cn("text-left shrink-0  max-w-5xl w-full mx-auto py-5 bg-background", className)}
+    >
+      <InputGroup className="h-full">
         <InputGroupTextarea
           className="min-h-4"
           placeholder={placeholder}
@@ -126,5 +129,24 @@ export const ChatInputBox: FC<ChatInputProps> = ({
         Press Enter to send, Shift+Enter for new line{" "}
       </span>
     </div>
+  );
+};
+export const ChatInputDisplay = ({
+  quotedText,
+  onQuotedTextChange,
+}: {
+  quotedText: string;
+  onQuotedTextChange: (text: string) => void;
+}) => {
+  const { onChatSubmit } = useChatContext();
+
+  return (
+    <ChatInputBox
+      onSubmit={onChatSubmit}
+      useIconButton
+      placeholder="Ask another question"
+      initialValue={quotedText}
+      onValueChange={onQuotedTextChange}
+    />
   );
 };

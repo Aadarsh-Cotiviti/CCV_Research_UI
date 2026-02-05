@@ -8,14 +8,14 @@ import { ClientSessionMessage, ClientSessionMessages } from "@/lib/db";
 
 export type AddServerMessageFunc = (message: MessageInsert, sessionId: string) => Promise<Message>;
 
-type MessageState = "idle" | "loading" | "responding" | "error";
+type SectionState = "idle" | "loading" | "responding" | "error";
 
 export interface MessagesContext {
   chatData: ChatData;
   currentSectionId: string;
   currentMessages: ClientSessionMessages;
-  state: MessageState;
-  setState: (state: MessageState) => void;
+  state: SectionState;
+  setState: (state: SectionState) => void;
   setChatData: (newChatData: ChatData) => void;
   setSelectedSection: (id: string) => void;
   onChatSubmit: SubmitHandler;

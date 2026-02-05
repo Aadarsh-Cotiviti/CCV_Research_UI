@@ -1,50 +1,56 @@
 "use client";
 
 import { AssistantRenderer } from "@/components/chatDisplay";
-import type { components } from "@/lib/api-types";
 import { LinkIcon, RefreshCcw, Search } from "lucide-react";
 import { FC, ReactNode, useMemo } from "react";
-import { LEGEND, LegendCard } from "./legendCard";
+import { LEGEND, LegendCard } from "../legendCard";
+import type { components } from "@/lib/api-types";
 
-type Section1Data = components["schemas"]["Section1Data"];
-type InternalLlmRecodingResult = components["schemas"]["InternalLlmRecodingResult"];
-type NeighbouringCode = components["schemas"]["NeighbouringCode"];
+type CodeDescriptionResult = components["schemas"]["CodeDescriptionResult"];
+type CodeDescriptionNeighbor = CodeDescriptionResult["neighbouring_codes"][number];
+type CodeDescriptionRecodingEntry = {
+  cpt_code?: string;
+  description?: string;
+  description_source?: string;
+  llm_recoding?: {
+    recoding_possibilities?: string;
+  };
+};
+type CodeDescriptionPayload =
+  | { section_num: number; status: "success"; data: CodeDescriptionResult | string }
+  | { section_num: number; status: "error"; error: string };
 
-type Section1Payload =
-  | { section_num: number; status: "success"; data: Section1Data | string }
-  | { section_num: number; status: "error"; error: string }
-  | Section1Data;
-
-const isSection1Data = (value: unknown): value is Section1Data => {
-  if (!value || typeof value !== "object") return false;
-  const data = value as Partial<Section1Data>;
-
+const isCodeDescriptionResult = (raw: unknown): raw is CodeDescriptionResult => {
+  if (!raw || typeof raw !== "object") return false;
+  const candidate = raw as CodeDescriptionResult;
   return (
-    Array.isArray(data.neighbouring_codes) &&
-    Array.isArray(data.internal_recoding_result) &&
-    Array.isArray(data.internal_llm_recoding_result) &&
-    Array.isArray(data.external_full_llm_result)
+    Array.isArray(candidate.neighbouring_codes) &&
+    Array.isArray(candidate.internal_recoding_result) &&
+    Array.isArray(candidate.no_change_results)
   );
 };
 
-const parseSection1Content = (content: string): Section1Data | null => {
-  const tryParse = (raw: unknown, allowNested = true): Section1Data | null => {
-    if (isSection1Data(raw)) return raw;
+const parseCodeDescriptionContent = (content: string): CodeDescriptionResult | null => {
+  const tryParse = (raw: unknown, allowNested = true): CodeDescriptionResult | null => {
     if (!raw || typeof raw !== "object") return null;
 
-    const maybePayload = raw as Partial<Section1Payload>;
+    if (isCodeDescriptionResult(raw)) return raw;
+
+    const maybePayload = raw as Partial<CodeDescriptionPayload>;
     if ("status" in maybePayload) {
       if (maybePayload.status !== "success") return null;
-
-      if (isSection1Data(maybePayload.data)) return maybePayload.data;
 
       if (typeof maybePayload.data === "string" && allowNested) {
         try {
           return tryParse(JSON.parse(maybePayload.data), false);
         } catch (error) {
-          console.warn("Failed to parse nested section 1 data", error);
+          console.warn("Failed to parse nested code description data", error);
           return null;
         }
+      }
+
+      if (maybePayload.data && typeof maybePayload.data === "object") {
+        return isCodeDescriptionResult(maybePayload.data) ? maybePayload.data : null;
       }
     }
 
@@ -60,7 +66,7 @@ const parseSection1Content = (content: string): Section1Data | null => {
       return tryParse(JSON.parse(parsed), false);
     }
   } catch (error) {
-    console.warn("Failed to parse section 1 response", error);
+    console.warn("Failed to parse code description response", error);
     return null;
   }
 
@@ -93,7 +99,7 @@ const SubsectionHeading: FC<{ id: string; children: ReactNode }> = ({ id, childr
   </div>
 );
 
-const CodeLine: FC<{ code: NeighbouringCode }> = ({ code }) => (
+const CodeLine: FC<{ code: CodeDescriptionNeighbor }> = ({ code }) => (
   <p className="leading-relaxed text-base text-foreground">
     <strong className={`text-${LEGEND[code.source].color}`}>{`CPT ${code.cpt_code}`}</strong>:
     <span className="ml-1 text-foreground" title={`Source: ${code.source}`}>
@@ -102,44 +108,54 @@ const CodeLine: FC<{ code: NeighbouringCode }> = ({ code }) => (
   </p>
 );
 
-const RecodingCard: FC<{ entry: InternalLlmRecodingResult }> = ({ entry }) => (
+const RecodingCard: FC<{ entry: CodeDescriptionRecodingEntry }> = ({ entry }) => (
   <div
-    className="border border-muted rounded-lg p-4 shadow-sm bg-white"
-    id={`cpt-${entry.cpt_code}`}
+    className="border border-muted rounded-lg p-4 bg-muted/20 hover:bg-muted/30 transition-colors"
+    id={`cpt-${entry.cpt_code ?? "unknown"}`}
   >
-    <SubsectionHeading id={`cpt-${entry.cpt_code}`}>CPT {entry.cpt_code}</SubsectionHeading>
+    <SubsectionHeading id={`cpt-${entry.cpt_code ?? "unknown"}`}>
+      CPT {entry.cpt_code ?? "Unknown"}
+    </SubsectionHeading>
     <p className="text-sm text-foreground">
-      <strong>Description:</strong> <span>{entry.description}</span>
+      <strong>Description:</strong> <span>{entry.description ?? "Description not available"}</span>
     </p>
     <p className="mt-3 font-semibold text-foreground">Potential Re-coding/Bundling Scenarios:</p>
     <div className="mt-1 whitespace-pre-wrap text-foreground text-sm leading-6">
-      {entry.llm_recoding.recoding_possibilities}
+      {entry.llm_recoding?.recoding_possibilities ?? "No recoding analysis available."}
     </div>
   </div>
 );
 
-const SectionOneContent: FC<{ data: Section1Data }> = ({ data }) => {
+const CodeDescriptionContent: FC<{ data: CodeDescriptionResult }> = ({ data }) => {
   const neighbouringCodes = useMemo(
     () =>
-      [...(data.neighbouring_codes || [])].sort((a, b) => {
-        const aNum = Number(a.cpt_code);
-        const bNum = Number(b.cpt_code);
+      [...((data.neighbouring_codes as CodeDescriptionNeighbor[] | undefined) || [])].sort(
+        (a, b) => {
+          const aCode = String(a?.cpt_code ?? "");
+          const bCode = String(b?.cpt_code ?? "");
+          const aNum = Number(aCode);
+          const bNum = Number(bCode);
 
-        if (Number.isFinite(aNum) && Number.isFinite(bNum)) return aNum - bNum;
-        return a.cpt_code.localeCompare(b.cpt_code);
-      }),
+          if (Number.isFinite(aNum) && Number.isFinite(bNum)) return aNum - bNum;
+          return aCode.localeCompare(bCode);
+        },
+      ),
     [data.neighbouring_codes],
   );
 
   const recodingEntries = useMemo(
     () =>
-      [...(data.internal_llm_recoding_result || [])].sort((a, b) => {
-        const aNum = Number(a.cpt_code);
-        const bNum = Number(b.cpt_code);
+      [...((data.internal_llm_recoding_result as CodeDescriptionRecodingEntry[]) || [])].sort(
+        (a, b) => {
+          const aCode = String(a?.cpt_code ?? "");
+          const bCode = String(b?.cpt_code ?? "");
+          const aNum = Number(aCode);
+          const bNum = Number(bCode);
 
-        if (Number.isFinite(aNum) && Number.isFinite(bNum)) return aNum - bNum;
-        return a.cpt_code.localeCompare(b.cpt_code);
-      }),
+          if (Number.isFinite(aNum) && Number.isFinite(bNum)) return aNum - bNum;
+          return aCode.localeCompare(bCode);
+        },
+      ),
     [data.internal_llm_recoding_result],
   );
 
@@ -186,11 +202,11 @@ const SectionOneContent: FC<{ data: Section1Data }> = ({ data }) => {
   );
 };
 
-const SectionOneRenderer: AssistantRenderer = ({ message }) => {
-  const parsedData = useMemo(() => parseSection1Content(message.content), [message.content]);
+const CodeDescriptionRenderer: AssistantRenderer = ({ message }) => {
+  const parsedData = useMemo(() => parseCodeDescriptionContent(message.content), [message.content]);
   if (!parsedData) return <>{message.content}</>;
 
-  return <SectionOneContent data={parsedData} />;
+  return <CodeDescriptionContent data={parsedData} />;
 };
 
-export const sectionRenderers: AssistantRenderer[] = [SectionOneRenderer];
+export default CodeDescriptionRenderer;

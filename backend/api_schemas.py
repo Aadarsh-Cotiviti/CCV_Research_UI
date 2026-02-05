@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 from pydantic import BaseModel, Field
 
 
@@ -77,35 +77,13 @@ class AccuracyFeedbackRequest(BaseModel):
     reason: Optional[str] = None
 
 
-class NcciRetrieveRequest(BaseModel):
-    cpt: int
-    top_k: int = 15
 
-class NeighbouringCode(BaseModel):
-    cpt_code: str
-    description: str
-    source: str
 
-class LlmRecoding(BaseModel):
-    recoding_possibilities: str
-    source: str
-
-class InternalLlmRecodingResult(BaseModel):
-    cpt_code: str
-    description: str
-    description_source: str
-    llm_recoding: LlmRecoding
-
-class Section1Data(BaseModel):
-    neighbouring_codes: List[NeighbouringCode]
-    internal_recoding_result: List[dict]  # empty list in sample; tighten if you have a schema
-    internal_llm_recoding_result: List[InternalLlmRecodingResult]
-    external_full_llm_result: List[dict]  # empty list in sample; tighten if you have a schema
 
 class SectionSuccess(BaseModel):
     section_num: int
     status: Literal["success"]
-    data: Union[Section1Data, str]  # str for section 6 content; structured for section 1
+    data: Union[str, str]  # str for section 6 content; structured for section 1
 
 class SectionError(BaseModel):
     section_num: int
@@ -114,8 +92,159 @@ class SectionError(BaseModel):
 
 SectionResult = Union[SectionSuccess, SectionError]
 
-class ResearchRunResult(BaseModel):
+
+# ---------- APC section response models ----------
+
+class ErrorResult(BaseModel):
+    success: Literal[False] = False
+    content: Optional[Any] = None
+    error: str
+    section_id: str
+    section_title: str
+
+
+class CPTDescription(BaseModel):
+    cpt_code: str
+    description: str
+    source: str
+
+
+class CodeDescriptionNeighbor(BaseModel):
+    cpt_code: str
+    description: str
+    source: str
+
+
+class CodeDescriptionKbRecoding(BaseModel):
+    cpt_code: str
+    cpt_description: str
+    change_type: str
+    cpt_change_description: str
+    resource: str
+
+
+class CodeDescriptionNoChange(BaseModel):
+    cpt_code: str
+    description: str
+    description_source: str
+    status: str
+
+
+class CodeDescriptionResult(BaseModel):
+    neighbouring_codes: List[CodeDescriptionNeighbor]
+    internal_recoding_result: List[CodeDescriptionKbRecoding]
+    no_change_results: List[CodeDescriptionNoChange]
+    internal_llm_recoding_result: List[Dict[str, Any]] = Field(default_factory=list)
+    external_full_llm_result: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class GuidelineResult(BaseModel):
+    analysis_content: str
+    cpt_descriptions: Dict[str, CPTDescription]
+    source: str = "llm"
+
+
+class PaymentTable(BaseModel):
+    data: List[Dict[str, Any]]
+    data_filtered: List[Dict[str, Any]]
+    data_filtered_df: Optional[Any] = None
+    exclusions: Dict[str, Any]
+    excluded_cpt_codes: List[str]
+    record_count: int
+    record_count_filtered: int
+
+    class Config:
+        arbitrary_types_allowed = True
+
+
+class TargetPaymentHistory(BaseModel):
+    apc: PaymentTable
+    asc: PaymentTable
+    pnpp: PaymentTable
+    source: str
+    cpt_codes_analyzed: List[str]
+    neighboring_codes: List[str]
+
+
+class PaymentRateResult(BaseModel):
+    analysis_content: str
+    target_cpt_payment_history: TargetPaymentHistory
+    cpt_descriptions: Dict[str, CPTDescription]
+    source: str = "llm"
+
+
+class DeviceDescription(BaseModel):
+    hcpcs_code: str
+    description: str
+    source: str
+
+
+class DeviceNoChange(BaseModel):
+    hcpcs_code: str
+    description: str
+    description_source: str
+    status: str
+
+
+class DeviceCodeResult(BaseModel):
+    device_codes_with_desc: List[DeviceDescription]
+    internal_recoding_result: List[Dict[str, Any]]
+    no_change_results: List[DeviceNoChange]
+    internal_llm_recoding_result: List[Dict[str, Any]] = Field(default_factory=list)
+    external_full_llm_result: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class PtpTable(BaseModel):
+    data: List[Dict[str, Any]]
+    record_count: int
+
+
+class PtpTablesForCpt(BaseModel):
+    modifier_0: Optional[PtpTable] = None
+    modifier_1: Optional[PtpTable] = None
+    has_data: bool
+    source: str
+
+
+class NcciResult(BaseModel):
+    analysis_content: str
+    ptp_tables_by_cpt: Dict[str, PtpTablesForCpt]
+    ncci_manual_by_cpt: Dict[str, Dict[str, Any]]
+    ncci_chunk_details_by_cpt: Dict[str, Dict[str, Any]]
+    neighboring_codes: List[str]
+    cpt_descriptions: Dict[str, CPTDescription]
+    source: str = "internal_kb"
+
+
+class ReferenceMaterialResult(BaseModel):
+    analysis_content: str
+    cpt_descriptions: Dict[str, CPTDescription]
+    source: str = "llm"
+
+
+class PaymentHistoryEntry(BaseModel):
+    data: List[Dict[str, Any]] = Field(default_factory=list)
+    has_data: bool = False
+
+
+class FinalAssessment(BaseModel):
     target_cpt: str
-    context_details: str
-    model: str
-    sections: Dict[str, SectionResult]
+    cpt_descriptions: Dict[str, Dict[str, Any]]
+    ncci_results: Dict[str, Dict[str, Any]]
+    device_codes: List[DeviceDescription]
+    payment_history: Dict[str, PaymentHistoryEntry]
+    update_time: str
+    source: str = "internal_kb"
+
+
+SectionResponse = Union[
+    CodeDescriptionResult,
+    GuidelineResult,
+    PaymentRateResult,
+    DeviceCodeResult,
+    NcciResult,
+    ReferenceMaterialResult,
+    FinalAssessment,
+    ErrorResult,
+]
+

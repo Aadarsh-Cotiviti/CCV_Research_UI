@@ -85,7 +85,7 @@ export const getChatSession = async (uid: string, sessionId: string, limit?: num
 
 export const createChatSession = async (
   userId: string,
-  messages: Omit<schemas.MessageInsert, "chatId">[],
+  messages: Omit<schemas.MessageInsert, "sectionId">[],
 ) => {
   const userMsg = messages.find((msg) => msg.role === "user");
   if (!userMsg) throw new Error("Missing initial user msg");

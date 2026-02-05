@@ -7,6 +7,23 @@ export type GenerateCptRequest = components["schemas"]["GenerateCptRequest"];
 export type RunAllRequest = components["schemas"]["RunAllRequest"];
 export type ChatRequest = components["schemas"]["ChatRequest"];
 export type ApcChatRequest = components["schemas"]["ApcChatRequest"];
+export type CodeDescriptionResult = components["schemas"]["CodeDescriptionResult"];
+export type GuidelineResult = components["schemas"]["GuidelineResult"];
+export type PaymentRateResult = components["schemas"]["PaymentRateResult"];
+export type DeviceCodeResult = components["schemas"]["DeviceCodeResult"];
+export type NcciResult = components["schemas"]["NcciResult"];
+export type ReferenceMaterialResult = components["schemas"]["ReferenceMaterialResult"];
+export type FinalAssessment = components["schemas"]["FinalAssessment"];
+export type ErrorResult = components["schemas"]["ErrorResult"];
+export type RunSectionResult =
+  | CodeDescriptionResult
+  | GuidelineResult
+  | PaymentRateResult
+  | DeviceCodeResult
+  | NcciResult
+  | ReferenceMaterialResult
+  | FinalAssessment
+  | ErrorResult;
 const client = createClient<paths>({ baseUrl: apiBase });
 
 async function apiBuffer(path: string): Promise<ArrayBuffer> {

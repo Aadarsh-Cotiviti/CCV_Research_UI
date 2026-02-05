@@ -11,7 +11,7 @@ const Page = () => {
   const onSubmit: SubmitHandler = async (input, model) => {
     "use server";
     const jwtUserData = await getSessionToken();
-    const messages: Omit<MessageInsert, "chatId">[] = [
+    const messages: Omit<MessageInsert, "sectionId">[] = [
       {
         role: "system",
         content: "You are a helpful assistant with the persona of a CCV Researcher.",

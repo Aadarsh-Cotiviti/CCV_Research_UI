@@ -145,6 +145,15 @@ export interface components {
             /** Messages */
             messages?: components["schemas"]["ChatMessage"][];
         };
+        /** CPTDescription */
+        CPTDescription: {
+            /** Cpt Code */
+            cpt_code: string;
+            /** Description */
+            description: string;
+            /** Source */
+            source: string;
+        };
         /** ChatMessage */
         ChatMessage: {
             /**
@@ -165,6 +174,56 @@ export interface components {
             /** Messages */
             messages?: components["schemas"]["ChatMessage"][];
         };
+        /** CodeDescriptionKbRecoding */
+        CodeDescriptionKbRecoding: {
+            /** Cpt Code */
+            cpt_code: string;
+            /** Cpt Description */
+            cpt_description: string;
+            /** Change Type */
+            change_type: string;
+            /** Cpt Change Description */
+            cpt_change_description: string;
+            /** Resource */
+            resource: string;
+        };
+        /** CodeDescriptionNeighbor */
+        CodeDescriptionNeighbor: {
+            /** Cpt Code */
+            cpt_code: string;
+            /** Description */
+            description: string;
+            /** Source */
+            source: string;
+        };
+        /** CodeDescriptionNoChange */
+        CodeDescriptionNoChange: {
+            /** Cpt Code */
+            cpt_code: string;
+            /** Description */
+            description: string;
+            /** Description Source */
+            description_source: string;
+            /** Status */
+            status: string;
+        };
+        /** CodeDescriptionResult */
+        CodeDescriptionResult: {
+            /** Neighbouring Codes */
+            neighbouring_codes: components["schemas"]["CodeDescriptionNeighbor"][];
+            /** Internal Recoding Result */
+            internal_recoding_result: components["schemas"]["CodeDescriptionKbRecoding"][];
+            /** No Change Results */
+            no_change_results: components["schemas"]["CodeDescriptionNoChange"][];
+            /** Internal Llm Recoding Result */
+            internal_llm_recoding_result?: {
+                [key: string]: unknown;
+            }[];
+            /** External Full Llm Result */
+            external_full_llm_result?: {
+                [key: string]: unknown;
+            }[];
+        };
         /** CptCodeResult */
         CptCodeResult: {
             /**
@@ -183,6 +242,92 @@ export interface components {
              */
             source: string;
         };
+        /** DeviceCodeResult */
+        DeviceCodeResult: {
+            /** Device Codes With Desc */
+            device_codes_with_desc: components["schemas"]["DeviceDescription"][];
+            /** Internal Recoding Result */
+            internal_recoding_result: {
+                [key: string]: unknown;
+            }[];
+            /** No Change Results */
+            no_change_results: components["schemas"]["DeviceNoChange"][];
+            /** Internal Llm Recoding Result */
+            internal_llm_recoding_result?: {
+                [key: string]: unknown;
+            }[];
+            /** External Full Llm Result */
+            external_full_llm_result?: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** DeviceDescription */
+        DeviceDescription: {
+            /** Hcpcs Code */
+            hcpcs_code: string;
+            /** Description */
+            description: string;
+            /** Source */
+            source: string;
+        };
+        /** DeviceNoChange */
+        DeviceNoChange: {
+            /** Hcpcs Code */
+            hcpcs_code: string;
+            /** Description */
+            description: string;
+            /** Description Source */
+            description_source: string;
+            /** Status */
+            status: string;
+        };
+        /** ErrorResult */
+        ErrorResult: {
+            /**
+             * Success
+             * @default false
+             * @constant
+             */
+            success: false;
+            /** Content */
+            content?: unknown | null;
+            /** Error */
+            error: string;
+            /** Section Id */
+            section_id: string;
+            /** Section Title */
+            section_title: string;
+        };
+        /** FinalAssessment */
+        FinalAssessment: {
+            /** Target Cpt */
+            target_cpt: string;
+            /** Cpt Descriptions */
+            cpt_descriptions: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** Ncci Results */
+            ncci_results: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** Device Codes */
+            device_codes: components["schemas"]["DeviceDescription"][];
+            /** Payment History */
+            payment_history: {
+                [key: string]: components["schemas"]["PaymentHistoryEntry"];
+            };
+            /** Update Time */
+            update_time: string;
+            /**
+             * Source
+             * @default internal_kb
+             */
+            source: string;
+        };
         /** GenerateCptRequest */
         GenerateCptRequest: {
             /** Topic */
@@ -193,10 +338,138 @@ export interface components {
              */
             model: string;
         };
+        /** GuidelineResult */
+        GuidelineResult: {
+            /** Analysis Content */
+            analysis_content: string;
+            /** Cpt Descriptions */
+            cpt_descriptions: {
+                [key: string]: components["schemas"]["CPTDescription"];
+            };
+            /**
+             * Source
+             * @default llm
+             */
+            source: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** NcciResult */
+        NcciResult: {
+            /** Analysis Content */
+            analysis_content: string;
+            /** Ptp Tables By Cpt */
+            ptp_tables_by_cpt: {
+                [key: string]: components["schemas"]["PtpTablesForCpt"];
+            };
+            /** Ncci Manual By Cpt */
+            ncci_manual_by_cpt: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** Ncci Chunk Details By Cpt */
+            ncci_chunk_details_by_cpt: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** Neighboring Codes */
+            neighboring_codes: string[];
+            /** Cpt Descriptions */
+            cpt_descriptions: {
+                [key: string]: components["schemas"]["CPTDescription"];
+            };
+            /**
+             * Source
+             * @default internal_kb
+             */
+            source: string;
+        };
+        /** PaymentHistoryEntry */
+        PaymentHistoryEntry: {
+            /** Data */
+            data?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Has Data
+             * @default false
+             */
+            has_data: boolean;
+        };
+        /** PaymentRateResult */
+        PaymentRateResult: {
+            /** Analysis Content */
+            analysis_content: string;
+            target_cpt_payment_history: components["schemas"]["TargetPaymentHistory"];
+            /** Cpt Descriptions */
+            cpt_descriptions: {
+                [key: string]: components["schemas"]["CPTDescription"];
+            };
+            /**
+             * Source
+             * @default llm
+             */
+            source: string;
+        };
+        /** PaymentTable */
+        PaymentTable: {
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            }[];
+            /** Data Filtered */
+            data_filtered: {
+                [key: string]: unknown;
+            }[];
+            /** Data Filtered Df */
+            data_filtered_df?: unknown | null;
+            /** Exclusions */
+            exclusions: {
+                [key: string]: unknown;
+            };
+            /** Excluded Cpt Codes */
+            excluded_cpt_codes: string[];
+            /** Record Count */
+            record_count: number;
+            /** Record Count Filtered */
+            record_count_filtered: number;
+        };
+        /** PtpTable */
+        PtpTable: {
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            }[];
+            /** Record Count */
+            record_count: number;
+        };
+        /** PtpTablesForCpt */
+        PtpTablesForCpt: {
+            modifier_0?: components["schemas"]["PtpTable"] | null;
+            modifier_1?: components["schemas"]["PtpTable"] | null;
+            /** Has Data */
+            has_data: boolean;
+            /** Source */
+            source: string;
+        };
+        /** ReferenceMaterialResult */
+        ReferenceMaterialResult: {
+            /** Analysis Content */
+            analysis_content: string;
+            /** Cpt Descriptions */
+            cpt_descriptions: {
+                [key: string]: components["schemas"]["CPTDescription"];
+            };
+            /**
+             * Source
+             * @default llm
+             */
+            source: string;
         };
         /** RunAllRequest */
         RunAllRequest: {
@@ -217,6 +490,18 @@ export interface components {
              * @default true
              */
             use_cache: boolean;
+        };
+        /** TargetPaymentHistory */
+        TargetPaymentHistory: {
+            apc: components["schemas"]["PaymentTable"];
+            asc: components["schemas"]["PaymentTable"];
+            pnpp: components["schemas"]["PaymentTable"];
+            /** Source */
+            source: string;
+            /** Cpt Codes Analyzed */
+            cpt_codes_analyzed: string[];
+            /** Neighboring Codes */
+            neighboring_codes: string[];
         };
         /** ValidationError */
         ValidationError: {
@@ -344,7 +629,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CodeDescriptionResult"] | components["schemas"]["GuidelineResult"] | components["schemas"]["PaymentRateResult"] | components["schemas"]["DeviceCodeResult"] | components["schemas"]["NcciResult"] | components["schemas"]["ReferenceMaterialResult"] | components["schemas"]["FinalAssessment"] | components["schemas"]["ErrorResult"];
                 };
             };
             /** @description Validation Error */
