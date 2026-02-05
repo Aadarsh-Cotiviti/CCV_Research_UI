@@ -1,8 +1,7 @@
 "use client";
 
-import { useChatContext } from "@/components/chatContextProvider";
 import { ChatDisplay, SectionTabDisplay } from "@/components/chatDisplay";
-import { ChatInputBox, ChatInputDisplay } from "@/components/chatInput";
+import { ChatInputDisplay } from "@/components/chatInput";
 import { NotePadWrapper } from "@/components/notesPad";
 import { TextHighlightingProvider } from "@/components/textHighlightingProvider";
 import { HighlightedText } from "@/db/schemas";

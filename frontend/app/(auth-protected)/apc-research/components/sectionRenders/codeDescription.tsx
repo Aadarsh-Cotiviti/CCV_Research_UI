@@ -204,6 +204,7 @@ const CodeDescriptionContent: FC<{ data: CodeDescriptionResult }> = ({ data }) =
 
 const CodeDescriptionRenderer: AssistantRenderer = ({ message }) => {
   const parsedData = useMemo(() => parseCodeDescriptionContent(message.content), [message.content]);
+  console.log("Parsed Code Description Data:", parsedData);
   if (!parsedData) return <>{message.content}</>;
 
   return <CodeDescriptionContent data={parsedData} />;

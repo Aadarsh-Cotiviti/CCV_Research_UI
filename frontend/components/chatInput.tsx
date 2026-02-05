@@ -19,7 +19,6 @@ import { DropdownMenuTrigger } from "@radix-ui/react-dropdown-menu";
 import { Spinner } from "./ui/spinner";
 import { ResponsesModel } from "openai/resources/shared.mjs";
 import { AVAILABLE_MODELS } from "@/lib/llm";
-import { useProfileStore } from "./authComponents";
 import { useChatContext } from "./chatContextProvider";
 
 export type SubmitHandler = (content: string, model: ResponsesModel) => Promise<void>;
@@ -77,9 +76,9 @@ export const ChatInputBox: FC<ChatInputProps> = ({
 
   return (
     <div
-      className={cn("text-left shrink-0  max-w-5xl w-full mx-auto py-5 bg-background", className)}
+      className={cn("text-left shrink-0 max-w-5xl w-full mx-auto py-5 bg-background", className)}
     >
-      <InputGroup className="h-full">
+      <InputGroup className="h-full min-h-32">
         <InputGroupTextarea
           className="min-h-4"
           placeholder={placeholder}
