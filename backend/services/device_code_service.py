@@ -311,6 +311,7 @@ def analyze_device_code_analysis(target_cpt, device_codes=None, model="gpt-4.1-m
             empty_result = {
                 "device_codes_with_desc": [],
                 "internal_recoding_result": [],
+                "no_change_results": [],
                 "internal_llm_recoding_result": [],
                 "external_full_llm_result": []
             }
@@ -402,7 +403,9 @@ def analyze_device_code_analysis(target_cpt, device_codes=None, model="gpt-4.1-m
         return {
             "device_codes_with_desc": device_codes_with_desc,
             "internal_recoding_result": kb_results,
-            "no_change_results": no_change_results
+            "no_change_results": no_change_results,
+            "internal_llm_recoding_result": [],
+            "external_full_llm_result": []
         }
         
     except Exception as e:
@@ -412,6 +415,7 @@ def analyze_device_code_analysis(target_cpt, device_codes=None, model="gpt-4.1-m
         return {
             "device_codes_with_desc": [],
             "internal_recoding_result": [],
+            "no_change_results": [],
             "internal_llm_recoding_result": [],
             "external_full_llm_result": []
         }

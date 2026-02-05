@@ -163,6 +163,49 @@ Section IDs map to:
 
 **Configuration**: Each model requires specific environment variables for API keys and endpoints.
 
+### Storage Backend
+
+[storage.py](backend/services/storage.py) provides a unified interface for file storage operations across different backends:
+
+**Architecture**: Strategy pattern with abstract base class for flexibility and testability.
+
+**Supported Backends**:
+- `LocalStorageBackend` - Local filesystem (default)
+- `DatabricksStorageBackend` - Databricks DBFS
+
+**Key Classes**:
+- `StorageBackend` (ABC) - Abstract interface for all storage operations
+- `StorageManager` - Factory/singleton for global storage instance
+
+**Core Operations**:
+- `get_path(*paths)` - Construct backend-appropriate path
+- `file_exists(path)` / `directory_exists(path)` - Check existence
+- `read_text(path)` / `read_json(path)` / `read_csv(path)` - Read operations
+- `write_text(path, content)` / `write_json(path, data)` / `write_csv(path, df)` - Write operations
+- `list_files(directory, pattern)` - List files with optional glob pattern
+- `delete_file(path)` - Delete operations
+
+**Usage**:
+```python
+from services.storage import StorageManager
+
+# Auto-configured from STORAGE_MODE environment variable
+storage = StorageManager.get_storage()
+
+# Write and read data
+storage.write_json("output/results.json", {"key": "value"})
+data = storage.read_json("output/results.json")
+
+# Or configure explicitly
+StorageManager.initialize(backend_type="local", base_path="/path/to/data")
+```
+
+**Testing**:
+- `MockStorageBackend` in [tests/mocks/mock_storage.py](backend/tests/mocks/mock_storage.py) provides in-memory storage for fast, isolated tests
+- Unit tests in [tests/test_storage.py](backend/tests/test_storage.py)
+
+**Configuration**: Set `STORAGE_MODE=LOCAL` or `STORAGE_MODE=DATABRICKS` environment variable. For Databricks, also set `VOLUME_PATH`.
+
 ## Research Workflow
 
 The application follows a six-section research workflow for CPT code analysis:
@@ -242,6 +285,10 @@ AZURE_OPENAI_ENDPOINT_GPT_5_NANO=
 
 # Optional: Custom MedGEMMA model
 MEDGEMMA_MODEL_URL=
+
+# Storage Configuration (for file I/O abstraction)
+STORAGE_MODE=LOCAL  # Options: LOCAL (default), DATABRICKS
+VOLUME_PATH=  # Required for DATABRICKS mode (e.g., /Volumes/catalog/schema/volume)
 ```
 
 ### Frontend ([frontend/.env.local](frontend/.env.local))

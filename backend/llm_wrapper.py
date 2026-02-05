@@ -1,13 +1,14 @@
 
+from typing import Iterator, List
 import openai
 import os
-from typing import Iterator, List, Union
 from openai import AzureOpenAI
 from dotenv import load_dotenv
+
+from api_schemas import ChatMessage
 load_dotenv()
 
 import requests
-from api_schemas import ChatMessage
 
 
 # Map each model to its deployment name, API key, and endpoint
@@ -56,7 +57,7 @@ MODEL_CONFIGS = {
 }
 
 
-def query_llm(messages, model:str="gpt-4.1" ) -> str | None:
+def query_llm(messages, model="gpt-4.1"):
     if model == "medgemma-27b-multimodal7":
         config = MODEL_CONFIGS[model]
         url = config["url"]
@@ -105,7 +106,7 @@ def query_llm(messages, model:str="gpt-4.1" ) -> str | None:
     else:
         response = client.chat.completions.create(
             model=config["deployment"],
-            messages=messages,
+            messages=messages
         )
     return response.choices[0].message.content
 
@@ -121,7 +122,7 @@ def _normalize_messages(messages: List[ChatMessage]) -> List[dict]:
             # Fallback: best-effort cast
             normalized.append({"role": getattr(m, "role", None), "content": getattr(m, "content", None)})
     return normalized
-
+    
 
 def stream_llm(messages: List[ChatMessage], model: str = "gpt-4.1") -> Iterator[str]:
     normalized_messages = _normalize_messages(messages)
@@ -189,6 +190,3 @@ def stream_llm(messages: List[ChatMessage], model: str = "gpt-4.1") -> Iterator[
         delta = chunk.choices[0].delta
         if delta and delta.content:
             yield delta.content
-
-
-

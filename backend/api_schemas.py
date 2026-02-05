@@ -187,6 +187,9 @@ class DeviceNoChange(BaseModel):
 
 
 class DeviceCodeResult(BaseModel):
+    service: str
+    update_time: str
+    target_cpt: str
     device_codes_with_desc: List[DeviceDescription]
     internal_recoding_result: List[Dict[str, Any]]
     no_change_results: List[DeviceNoChange]
@@ -224,17 +227,45 @@ class ReferenceMaterialResult(BaseModel):
 
 class PaymentHistoryEntry(BaseModel):
     data: List[Dict[str, Any]] = Field(default_factory=list)
-    has_data: bool = False
+    has_data: bool 
+
+
+class CptDescriptionEntry(BaseModel):
+    description: str
+    source: str
+
+
+class NcciPtpModifierTable(BaseModel):
+    record_count: int
+    data: List[Dict[str, Any]]
+
+
+class NcciResultEntry(BaseModel):
+    cpt_code: str
+    ptp_modifier_0: Optional[NcciPtpModifierTable] = None
+    ptp_modifier_1: Optional[NcciPtpModifierTable] = None
+    ncci_manual_summary: str
+    has_ncci_data: bool
+    source: str
+
+
+class PaymentSystemData(BaseModel):
+    data: List[Dict[str, Any]]
+    has_data: bool
+
+
+class PaymentHistoryData(BaseModel):
+    apc: PaymentSystemData
+    asc: PaymentSystemData
+    pnpp: PaymentSystemData
 
 
 class FinalAssessment(BaseModel):
     target_cpt: str
-    cpt_descriptions: Dict[str, Dict[str, Any]]
-    ncci_results: Dict[str, Dict[str, Any]]
+    cpt_descriptions: Dict[str, CptDescriptionEntry]
+    ncci_results: Dict[str, NcciResultEntry]
     device_codes: List[DeviceDescription]
-    payment_history: Dict[str, PaymentHistoryEntry]
-    update_time: str
-    source: str = "internal_kb"
+    payment_history: PaymentHistoryData
 
 
 SectionResponse = Union[

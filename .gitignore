@@ -1,5 +1,6 @@
 # Ignore Claude cache
 .claude/
+
 # Environment
 .env
 .env.*
@@ -22,6 +23,11 @@ ENV/
 htmlcov/
 *.egg
 *.egg-info/
+dist/
+build/
+
+# C extensions
+*.so
 
 # Node / Next.js
 node_modules/
@@ -29,8 +35,6 @@ node_modules/
 .pnp.*
 .next/
 out/
-build/
-dist/
 .turbo/
 .vercel/
 *.tsbuildinfo
@@ -43,6 +47,7 @@ pnpm-debug.log*
 *.db
 *.db-wal
 *.db-shm
+*.sqlite3
 sqlite.db
 
 # Logs
@@ -55,8 +60,10 @@ sqlite.db
 Thumbs.db
 desktop.ini
 
-output
+# Windows shortcuts
+*.lnk
 
+# Application-specific
+output
 app.yml
 env.local
-.claude/

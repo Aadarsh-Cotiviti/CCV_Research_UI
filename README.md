@@ -1,35 +1,14 @@
-# CCV Research UI – Refactored (Backend + Frontend) 🚀
+# CCV Research UI – Medical Coding Analysis Platform
 
-A modular APC (Ambulatory Payment Classification) research application with:
-
-- Backend: Streamlit UI (legacy) plus new FastAPI endpoints for programmatic access
-- Frontend: Next.js 16 portal (auth, chat UI, libsql/Drizzle persistence)
+A comprehensive medical coding research and analysis platform for CPT code analysis across multiple payment systems (APC, ASC, PNPP) and compliance frameworks. The application consists of a Python backend (FastAPI + legacy Streamlit) and a Next.js 16 frontend.
 
 ## ✨ Highlights
 
-- **FastAPI layer** for the APC services (mirrors Streamlit flows)
-- **Agent-ready services**: each section is independently runnable
-- **Frontend portal** with Okta auth, chat, libsql/Drizzle
-- **Organized data/output** directories; SQLite auto-created
-
-git clone <repository-url>
-
-## 🚀 Quick Start
-
-### Backend (Python)
-
-```bash
-cd backend
-pip install -r requirements.txt
-```
-
-Data prerequisite: place `CPT Codes with Long Descriptions 2025.xlsx` under `backend/data/`.
-
-Run Streamlit UI (legacy):
-
-# CCV Research UI - Medical Coding Analysis Platform
-
-A comprehensive medical coding research and analysis platform built with Streamlit, designed to streamline CPT code analysis across multiple payment systems (APC, ASC, PNPP) and compliance frameworks.
+- **FastAPI layer** for programmatic access to APC services
+- **Agent-ready services**: Each section is independently runnable
+- **Frontend portal** with Okta auth, chat UI, and libsql/Drizzle persistence
+- **Streamlit UI** (legacy) for direct interaction
+- **Organized data/output** directories with auto-initialized SQLite databases
 
 ## 🏗️ System Architecture
 
@@ -37,8 +16,8 @@ A comprehensive medical coding research and analysis platform built with Streaml
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Streamlit Application                     │
-│                         (app.py)                             │
+│                   Application Layer                          │
+│        Streamlit UI (Legacy) | FastAPI | Next.js 16          │
 └──────────────┬────────────────────────────────┬──────────────┘
                │                                │
         ┌──────▼──────┐                  ┌──────▼──────┐
@@ -57,7 +36,6 @@ A comprehensive medical coding research and analysis platform built with Streaml
 ### Three-Tier Architecture
 
 #### 1. **Presentation Layer** (Views)
-
 - **Location**: `views/` directory
 - **Purpose**: User interface components and data visualization
 - **Technology**: Streamlit components, Pandas DataFrames, Markdown rendering
@@ -72,10 +50,10 @@ A comprehensive medical coding research and analysis platform built with Streaml
   - `final_assessment_view.py` - Consolidated findings report
 
 #### 2. **Business Logic Layer** (Services)
-
 - **Location**: `services/` directory
 - **Purpose**: Data processing, LLM orchestration, and business rules
 - **Design Pattern**: Service-oriented architecture with modular components
+- **Agentic Architecture**: Each section service operates independently with its own knowledge retrieval and LLM analysis
 - **Key Components**:
 
   **Core Services**:
@@ -107,7 +85,6 @@ A comprehensive medical coding research and analysis platform built with Streaml
   - `ptp_table_preprocessing.py` - NCCI PTP table processing
 
 #### 3. **Data Layer**
-
 - **Location**: `data/` directory and `ncci_rag/` system
 - **Storage Systems**:
 
@@ -167,7 +144,6 @@ A comprehensive medical coding research and analysis platform built with Streaml
 ```
 
 **NCCI RAG Components** (`ncci_rag/src/`):
-
 - `extract_pdf.py` - PDF text extraction with page metadata
 - `extract_toc.py` - Table of contents structure parsing
 - `chunk_and_tag.py` - Semantic chunking with metadata tagging
@@ -178,15 +154,41 @@ A comprehensive medical coding research and analysis platform built with Streaml
 - `llm_extract.py` - LLM-based analysis with citation
 
 **Auto-build System**:
-
 - Detects missing indices on first run
 - Builds all required indices automatically (10-15 minutes)
 - Stores indices in `ncci_rag/build/` directory
 - Supports manual pre-build via `build_all.py`
 
-## 🔄 Data Flow
+### Frontend Architecture (Next.js 16)
 
-### Research Workflow
+**Tech Stack**:
+- Next.js 16 App Router
+- React 19
+- TypeScript
+- Drizzle ORM with libsql (SQLite)
+- Hono for API routes
+- Okta authentication
+
+**Key Directories**:
+- `app/` - Next.js app router pages and API routes
+- `components/` - React UI components
+- `lib/` - Core utilities:
+  - `backendClient.ts` - Type-safe backend API client using openapi-fetch
+  - `db.ts` - Drizzle database client and queries
+  - `session.ts` - JWT session management
+  - `chat.ts` - Chat utilities
+- `db/schemas.ts` - Drizzle database schemas
+
+**Database Schema** (`db/schemas.ts`):
+- `users` - User accounts with Okta integration
+- `sessions` - Research sessions (type: "chat" | "apc")
+- `sections` - Session sections/conversations
+- `messages` - Chat messages with LLM responses
+- `message_feedback` - User feedback (positive/negative)
+- `highlighted_text` - User text highlights with annotations
+- `general_feedback` - App-wide feedback
+
+## 🔄 Research Workflow
 
 ```
 Step 1: Topic Input
@@ -235,60 +237,57 @@ Step 3: Export & Feedback
     └─ Accuracy feedback collection
 ```
 
-### Payment Data Processing
-
-```
-Excel Files (2024-2026 Quarterly Data)
-    │
-    ├─► APC Payment Loader
-    │       └─ Extract HCPCS, Year, APC Code, Payment Rate
-    │       └─ Filter by CMS exclusions (Status Indicator)
-    │
-    ├─► ASC Payment Loader
-    │       └─ Extract HCPCS, Year, Payment Rate
-    │       └─ Filter by CMS exclusions (Payment Indicator)
-    │
-    └─► PNPP Payment Loader
-            └─ Extract HCPCS, Year, Facility/Non-Facility Rates
-            └─ Filter by CMS exclusions (Status Code)
-    │
-    ▼
-Unified Payment History Dictionary
-    {
-      "apc": {data: [...], exclusions: {...}, has_data: bool},
-      "asc": {data: [...], exclusions: {...}, has_data: bool},
-      "pnpp": {data: [...], exclusions: {...}, has_data: bool}
-    }
-    │
-    ▼
-Display in Section 3 & Final Assessment
-```
-
 ## 🚀 Quick Start
 
 ### Prerequisites
-
 - Python 3.11+
+- Node.js 18+
 - Azure OpenAI API access (or compatible LLM API)
 
-### Installation
+### Backend Setup
 
 ```bash
-# Clone repository
-git clone <repository-url>
-cd CCV_Research_UI
-
-# Create virtual environment
-python3 -m venv ccv_research_env
-source ccv_research_env/bin/activate  # On Windows: ccv_research_env\Scripts\activate
+cd backend
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Run legacy Streamlit UI
+streamlit run app.py
+
+# Run FastAPI server (preferred for new development)
+uvicorn api:app --reload
+
+# Test refactored code
+python test_refactored_code.py
+
+# Build NCCI RAG indices (first-time setup, takes 10-15 minutes)
+python ncci_rag/src/build_all.py
 ```
+
+### Frontend Setup
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Run development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Generate TypeScript types from backend OpenAPI schema
+npm run gen:api-types
+```
+
+**Important**: Run `npm run gen:api-types` after any changes to backend API schemas to regenerate `lib/api-types.ts`.
 
 ### Data Setup
 
-1. **Place required Excel files in `data/` directory**:
+1. **Place required Excel files in `backend/data/` directory**:
    - `CPT Codes with Long Descriptions 2025.xlsx`
    - `apc_payment_changes_quarterly.xlsx`
    - `asc_payment_changes_quarterly.xlsx`
@@ -296,52 +295,76 @@ pip install -r requirements.txt
    - `hcpcs_codes_all.csv`
 
 2. **NCCI Manual for Section 5**:
-
    ```bash
    # Download NCCI Manual PDF
-   # Save as: ncci_rag/data/ncci_manual.pdf
+   # Save as: backend/ncci_rag/data/ncci_manual.pdf
 
    # Install RAG dependencies
    pip install pymupdf regex rank_bm25 chromadb pydantic
 
    # Indices will auto-build on first use (or manually pre-build):
-   python ncci_rag/src/build_all.py
+   python backend/ncci_rag/src/build_all.py
    ```
 
-3. **Preprocessed data will auto-generate in `data/` on first run**
+3. **Preprocessed data will auto-generate in `backend/data/` on first run**
 
-### Run Application
+## 🔧 Configuration
 
-```bash
-cd backend
-streamlit run app.py
-```
+### Backend Environment Variables
 
-Run FastAPI (new):
+Create `backend/.env`:
 
 ```bash
-cd backend
-uvicorn api:app --reload
+# Azure OpenAI (GPT-4.1 series)
+AZURE_OPENAI_API_KEY=
+AZURE_OPENAI_ENDPOINT=
+
+# Azure OpenAI (GPT-5 series)
+AZURE_OPENAI_API_KEY_GPT_5=
+AZURE_OPENAI_ENDPOINT_GPT_5=
+AZURE_OPENAI_API_KEY_GPT_5_MINI=
+AZURE_OPENAI_ENDPOINT_GPT_5_MINI=
+AZURE_OPENAI_API_KEY_GPT_5_NANO=
+AZURE_OPENAI_ENDPOINT_GPT_5_NANO=
+
+# Optional: Custom MedGEMMA model
+MEDGEMMA_MODEL_URL=
 ```
 
-Optional validation:
+### Frontend Environment Variables
+
+Create `frontend/.env.local`:
 
 ```bash
-cd backend
-python test_refactored_code.py
+# Okta Authentication
+NEXT_PUBLIC_AUTH_OKTA_ISSUER=
+NEXT_PUBLIC_AUTH_OKTA_CLIENT_ID=
+OKTA_CLIENT_SECRET=
+NEXT_PUBLIC_BASE_URL=
+NEXT_PUBLIC_POST_LOGOUT=
+
+# Database
+DB_URL=data/app.db
+
+# Session
+SESSION_JWT_SECRET=
+
+# Backend API
+BACKEND_API_URL=http://localhost:8000
+
+# Azure OpenAI (frontend LLM calls)
+AZURE_OPENAI_API_KEY=
+AZURE_OPENAI_ENDPOINT=
 ```
 
-### Frontend (Next.js 16)
+### LLM Configuration
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+Edit `backend/llm_wrapper.py`:
+- **Supported Models**: Azure OpenAI (`gpt-4.1`, `gpt-4.1-mini`, `gpt-4.1-nano`, `gpt-5`, `gpt-5-mini`, `gpt-5-nano`), Custom (`medgemma-27b-multimodal7`)
+- **Functions**: `query_llm(messages, model)` - Synchronous, `stream_llm(messages, model)` - Streaming
+- Configurable parameters: temperature, max_tokens, top_p
 
-Env vars: `NEXT_PUBLIC_AUTH_OKTA_*`, `NEXT_PUBLIC_BASE_URL`, `NEXT_PUBLIC_POST_LOGOUT`, `DB_URL` (libsql file), Azure OpenAI keys.
-
-## 📂 Project Structure (high level)
+## 📂 Project Structure
 
 ```
 backend/
@@ -349,129 +372,37 @@ backend/
 ├── api_schemas.py          # Pydantic request models
 ├── app.py                  # Streamlit UI entry
 ├── llm_wrapper.py          # Azure OpenAI / MedGEMMA client config
-├── db.py, feedback.py      # Legacy chat/feedback helpers
-├── personas.py             # Legacy persona config
 ├── requirements.txt
 ├── data/                   # SQLite files (auto), CPT Excel
 ├── output/                 # Cached findings, exports
 ├── services/               # APC business logic (agentic sections)
-│   ├── apc_orchestrator.py # conduct_section_research/run_all, chat helpers
-│   ├── cpt_service.py      # CPT generation/parsing
-│   ├── code_description_service.py ... (section 1)
-│   ├── guideline_examination_service.py (section 2)
-│   ├── payment_rate_service.py (section 3)
-│   ├── device_code_service.py (section 4)
-│   ├── ncci_compliance_service.py (section 5)
-│   ├── reference_material_service.py (section 6)
-│   ├── utils.py            # DB helpers (notes, chat, sessions, feedback)
-│   └── common/             # Shared CPT description utilities, etc.
-└── views/                  # Streamlit view components (legacy UI)
+│   ├── apc_orchestrator.py
+│   ├── cpt_service.py
+│   ├── code_description_service.py
+│   ├── guideline_examination_service.py
+│   ├── payment_rate_service.py
+│   ├── device_code_service.py
+│   ├── ncci_compliance_service.py
+│   ├── reference_material_service.py
+│   ├── final_assessment_service.py
+│   ├── utils.py
+│   ├── common/             # Shared utilities
+│   └── data_preprocessing/ # Data preprocessing scripts
+├── views/                  # Streamlit view components
+└── ncci_rag/              # NCCI RAG system
 
 frontend/
 ├── app/                    # Next.js app router
-├── components/             # UI components (chat, auth, notes, etc.)
-├── lib/                    # db.ts (Drizzle/libsql), llm.ts, okta.ts, chat.ts
+├── components/             # UI components
+├── lib/                    # Core utilities (db, api client, session)
 ├── db/schemas.ts           # Drizzle schema
-├── public/
-├── package.json, tsconfig.json, etc.
-└── data/                   # Frontend CPT descriptions JSON
+└── data/                   # Frontend data files
 ```
-
-## 🎯 Key Features
-
-### Research Workflow
-
-1. **Step 1: Topic Input**
-   - Enter your research topic
-   - Load previous sessions
-
-2. **Step 1.5: CPT Code Selection**
-   - AI-generated CPT code suggestions
-   - Manual code selection
-   - Code description lookup
-
-3. **Step 2: Research Execution**
-   - Six independent research sections
-   - Each section with dedicated service and view
-   - Final comprehensive assessment
-
-4. **Step 3: Results & Export**
-   - View detailed research results
-   - Export to PDF or Excel
-   - Chat with AI for clarifications
-   - Provide accuracy feedback
-   - Save notes for future reference
-
-### Six Research Sections
-
-1. **Code Description** - Detailed CPT code analysis
-2. **Guideline Examination** - Policy and guideline review
-3. **Payment Rate & Policy** - Reimbursement analysis
-4. **Device Code** - Related device coding
-5. **NCCI Compliance** - National Correct Coding Initiative checks
-6. **Reference Material** - Supporting documentation
-
-## 🧪 Architecture Principles
-
-### Services Layer (Business Logic)
-
-- **Pure Functions**: Testable, predictable business logic
-- **Agent-Ready**: Each service can operate independently
-- **Database Abstraction**: Centralized data operations
-- **LLM Integration**: Unified prompt building and parsing
-
-### Views Layer (UI Components)
-
-- **Component-Based**: Modular, reusable UI elements
-- **State Management**: Streamlit session_state integration
-- **Shared Components**: Common UI patterns in utils
-- **Clean Separation**: No business logic in views
-
-## 🔧 Configuration
-
-### LLM Models
-
-Configure in `llm_wrapper.py`:
-
-- Azure OpenAI (GPT-4.1, GPT-5 variants)
-- Custom MedGEMMA model
-
-### Database
-
-All databases auto-initialize in `data/` directory:
-
-- `apc_notes.db` - Research notes
-- `apc_chat.db` - Chat history
-- `apc_feedback.db` - User feedback
-- `apc_research_sessions.db` - Research sessions
-- `interactions2.db` - User interactions (legacy)
-- `feedback.db` - General feedback (legacy)
-  Access at: `http://localhost:8501`
-
-## 🔧 Configuration
-
-### Environment Variables
-
-Create `.env` file (optional):
-
-```bash
-AZURE_OPENAI_API_KEY=your_api_key
-AZURE_OPENAI_ENDPOINT=your_endpoint
-AZURE_OPENAI_DEPLOYMENT_NAME=your_deployment
-```
-
-### LLM Configuration
-
-Edit `llm_wrapper.py`:
-
-- Default model: GPT-4
-- Configurable parameters: temperature, max_tokens, top_p
-- Supports multiple Azure OpenAI deployments
 
 ## 📊 Output Structure
 
 ```
-output/
+backend/output/
 └── services_findings/
     └── {CPT_CODE}/
         ├── section_1_results.json   # Code descriptions
@@ -483,87 +414,40 @@ output/
         └── final_assessment.json    # Consolidated report
 ```
 
-## 🧪 Key Features
+## 🎯 Key Features
 
 ### Cost Optimization
-
 - **LLM call reduction**: Sections 1 & 4 skip LLM for unchanged codes
 - **Caching**: Preprocessed data stored locally
 - **Selective retrieval**: RAG system retrieves top-k only
 
 ### NCCI RAG Quality
-
 - **Hybrid search**: BM25 (lexical) + ChromaDB (semantic)
 - **Selective citation**: LLM cites only relevant chunks (not all 15)
 - **Prompt optimization**: Emphasizes quality over quantity
 
 ### Multi-Payment System Support
-
 - **APC**: Hospital Outpatient Prospective Payment System
 - **ASC**: Ambulatory Surgical Center Payment System
 - **PNPP**: Physician Non-Facility Payment Practice (Facility/Non-Facility rates)
 
 ### User Experience
-
 - **Auto-build system**: Missing indices built automatically
-- **Loading indicators**: Clear progress messages (e.g., "First-time build: 5 minutes")
+- **Loading indicators**: Clear progress messages
 - **Error handling**: Graceful degradation for missing data
 - **Feedback system**: Accuracy ratings and notes
-
-## 📝 Development Guide
-
-### Adding New Features
-
-1. **New Research Section**:
-   - Create service in `services/new_section_service.py`
-   - Create view in `views/new_section_view.py`
-   - Update orchestrator in `services/apc_orchestrator.py`
-   - Add tab in `views/apc_main_view.py`
-
-2. **New Payment System**:
-   - Create loader in `services/common/new_payment_comparison.py`
-   - Update `payment_rate_service.py` to include new system
-   - Update views to display new payment type
-
-3. **New Data Source**:
-   - Add loader in `services/data_preprocessing/`
-   - Update relevant service to consume data
-   - Add preprocessing step in orchestrator
-
-### Code Standards
-
-- Follow PEP 8 style guidelines
-- Use type hints for function signatures
-- Add docstrings (Google style) to all public functions
-- Keep functions focused (single responsibility)
-- Separate UI logic (views) from business logic (services)
-
-## 📚 Documentation
-
-- **Architecture**: This README
-- **NCCI RAG System**: `ncci_rag/README.md`
-- **Migration Guide**: `MIGRATION_GUIDE.md`
-- **Inline Documentation**: Docstrings in all modules
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
 1. **Missing indices error in Section 5**:
-   - Ensure `ncci_rag/data/ncci_manual.pdf` exists
+   - Ensure `backend/ncci_rag/data/ncci_manual.pdf` exists
    - Wait for auto-build (10-15 minutes on first run)
-   - Or manually run: `python ncci_rag/src/build_all.py`
-
-This will check:
-
-- ✅ Module imports
-- ✅ Directory structure
-- ✅ Database path configuration
-- ✅ Service layer functions
-- ✅ View layer functions
+   - Or manually run: `python backend/ncci_rag/src/build_all.py`
 
 2. **Payment data showing "N/A"**:
-   - Check Excel files are in `data/` directory
+   - Check Excel files are in `backend/data/` directory
    - Verify column names match expected format
    - Check CPT code exists in payment tables
 
@@ -572,84 +456,71 @@ This will check:
    - Check API quota and rate limits
    - Ensure deployment name matches configuration
 
+4. **Frontend API types out of sync**:
+   - Run `npm run gen:api-types` to regenerate from backend OpenAPI schema
+   - Ensure backend is running at `http://localhost:8000`
+
+5. **Database migrations not applied**:
+   - Frontend: Drizzle migrations auto-run on app start
+   - Backend: SQLite databases auto-initialize in `backend/data/`
+
+## 📝 Development Guide
+
+### Adding New Features
+
+1. **New Research Section**:
+   - Create service in `services/new_section_service.py`
+   - Implement `run_section_X()` function with `build_section_X_prompt()` and `parse_section_X_response()`
+   - Create view in `views/new_section_view.py`
+   - Update orchestrator in `services/apc_orchestrator.py`
+   - Update API in `api.py` (add to `SECTION_FUNCS`)
+   - Add tab in `views/apc_main_view.py`
+
+2. **New Payment System**:
+   - Create loader in `services/common/new_payment_comparison.py`
+   - Update `payment_rate_service.py` to include new system
+   - Update views and final assessment to display new payment type
+
+3. **New Data Source**:
+   - Add loader in `services/data_preprocessing/`
+   - Update relevant service to consume data
+   - Add preprocessing step in orchestrator
+
+### Code Standards
+- Follow PEP 8 style guidelines (backend), TypeScript strict mode (frontend)
+- Use type hints for function signatures
+- Add docstrings (Google style) to all public functions
+- Keep functions focused (single responsibility)
+- Separate UI logic (views/components) from business logic (services)
+- **Agentic pattern**: Services should be independently executable with standard interfaces
+- **Database abstraction**: Use utility functions in `services/utils.py` or `lib/db.ts`
+
 ## 🔮 Future Roadmap
 
-1. **Create Service Module**: `services/new_section_service.py`
-   - Implement `run_section_X()` function
-   - Build prompt with `build_section_X_prompt()`
-   - Parse response with `parse_section_X_response()`
-
-2. **Create View Module**: `views/new_section_view.py`
-   - Implement `render_section_X()` function
-   - Use shared components from `views/utils.py`
-
-3. **Update Orchestrator**: `services/apc_orchestrator.py`
-   - Add section to `run_all_sections()`
-   - Implement `run_section_X()` method
-
-4. **Update Main View**: `views/apc_main_view.py`
-   - Add tab in `render_step3()`
-   - Import and call new view function
-
-### Code Style
-
-- Follow PEP 8 guidelines
-- Use type hints where appropriate
-- Add docstrings to all functions
-- Keep functions focused and testable
-
-## 🚀 Future Enhancements
-
-### Planned Features
-
 - [ ] Unit tests for all service modules
-- [ ] Agent-to-agent communication protocol
-- [ ] Parallel section execution
-- [ ] Advanced caching strategies
-- [ ] Performance monitoring dashboard
-- [ ] Multi-user support
-- [ ] API endpoints for programmatic access
-
-### Agentic Workflow
-
-Each section service is designed to become an autonomous agent:
-
-- Independent execution capability
-- Standardized input/output interfaces
-- Inter-agent communication ready
-- Result aggregation support
-
-## 📝 License
-
-[Add your license information]
-
-## 🤝 Contributing
-
-[Add contribution guidelines]
-
-## 📧 Contact
-
-[Add contact information]
-
 - [ ] Multi-user authentication and authorization
 - [ ] Parallel section execution for faster processing
-- [ ] Advanced caching with Redis
-- [ ] REST API for programmatic access
+- [ ] Agent-to-agent communication protocol
+- [ ] Advanced caching strategies (Redis)
+- [ ] Performance monitoring dashboard
+- [ ] REST API enhancements for programmatic access
 - [ ] Batch processing mode for multiple CPT codes
 - [ ] Custom RAG models for specialized medical domains
 - [ ] Export templates customization
 - [ ] Real-time collaboration features
 
+## 📚 Documentation
+
+- **Architecture**: This README
+- **Project Instructions**: `CLAUDE.md`
+- **NCCI RAG System**: `backend/ncci_rag/README.md`
+- **Migration Guide**: `MIGRATION_GUIDE.md` (if available)
+- **Inline Documentation**: Docstrings in all modules
+
 ---
 
-**Version**: 2.1  
-<<<<<<< HEAD
-**Last Updated**: 2026-01-19  
-**Architecture**: Modular Services/Views with FastAPI layer
-=======
-**Last Updated**: January 26, 2026  
-**Architecture**: Three-Tier Services/Views/Data Pattern  
-**License**: [Add License]  
+**Version**: 2.1
+**Last Updated**: February 5, 2026
+**Architecture**: Three-Tier Services/Views/Data Pattern with FastAPI + Next.js 16
+**License**: [Add License]
 **Contact**: [Add Contact]
-
-> > > > > > > diana/refactor_services_split
