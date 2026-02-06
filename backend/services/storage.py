@@ -2,6 +2,7 @@ import os
 import io
 import json
 import logging
+import posixpath
 
 
 class FileStorage:
@@ -21,10 +22,32 @@ class FileStorage:
             from databricks.sdk import WorkspaceClient
 
             self._client = WorkspaceClient()
-            self._base = os.getenv("VOLUME_PATH", "").rstrip("/")
+            raw_base = os.getenv("VOLUME_PATH", "")
+            self._base = self._normalize_databricks_base(raw_base)
         else:
             self._base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         print(f"FileStorage initialized. Using Databricks: {self.use_databricks} Base path: {self._base}")
+
+    def _normalize_databricks_base(self, base: str) -> str:
+        """Normalize Databricks base path for Files API usage."""
+        base = (base or "").strip().rstrip("/")
+        if not base:
+            return base
+
+        if base.startswith("dbfs:/"):
+            return "/dbfs/" + base[len("dbfs:/"):]
+
+        if base.startswith("/"):
+            return base
+
+        if base.lower().startswith("volumes/"):
+            return "/" + base
+
+        self._logger.warning(
+            "VOLUME_PATH is not absolute. Prefixing with /Volumes/: %s",
+            base,
+        )
+        return "/Volumes/" + base
 
     def _log_file_action(self, function_name: str, path: str) -> None:
         self._logger.info("%s: %s", function_name, path)
@@ -40,10 +63,10 @@ class FileStorage:
 
     def get_path(self, *path_parts: str) -> str:
         """Get full path in the storage system"""
-        relative_path = os.path.join(*path_parts)
         if self.use_databricks:
-            return f"{self._base}/{relative_path}"
+            return posixpath.join(self._base, *path_parts)
         else:
+            relative_path = os.path.join(*path_parts)
             return os.path.join(self._base, relative_path)
 
     def exists(self, path: str) -> bool:
