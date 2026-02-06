@@ -25,6 +25,7 @@ class FileStorage:
         else:
             self._base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         print(f"FileStorage initialized. Using Databricks: {self.use_databricks} Base path: {self._base}")
+        print(f"Logger level: {self.list_files(self.get_path('data'))}")
 
     def _log_file_action(self, function_name: str, path: str) -> None:
         self._logger.info("%s: %s", function_name, path)
