@@ -42,7 +42,7 @@ class FileStorage:
         """Get full path in the storage system"""
         relative_path = os.path.join(*path_parts)
         if self.use_databricks:
-            return f"/{self._base}/{relative_path}"
+            return f"{self._base}/{relative_path}"
         else:
             return os.path.join(self._base, relative_path)
 
