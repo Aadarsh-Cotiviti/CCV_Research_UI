@@ -8,6 +8,7 @@ import pandas as pd
 from datetime import datetime
 import os
 from services.utils import load_s3_parquet_files
+from ..storage import fileStorage
 
 def load_combined_parquet(file_path):
     """
@@ -20,7 +21,7 @@ def load_combined_parquet(file_path):
         DataFrame with loaded data
     """
     print(f"📂 Loading parquet file: {file_path}")
-    df = pd.read_parquet(file_path)
+    df = pd.read_parquet(fileStorage.get_path(file_path))
     print(f"✅ Loaded {len(df)} records")
     # Loaded 407,727 rows, 17 columns 
     # Columns: ['CPTCd', 'ChangeType', 'OriginalStart', 'VersionEnd', 'RevisedStart', 
@@ -169,9 +170,7 @@ def save_to_csv(df, output_path):
     print(f"\n💾 Saving to CSV: {output_path}")
     
     # Create output directory if it doesn't exist
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    
-    df.to_csv(output_path, index=False)
+    fileStorage.write_csv(output_path, df, index=False)    
     print(f"   ✅ Saved {len(df)} records to {output_path}")
     
    
@@ -186,8 +185,8 @@ if __name__ == "__main__":
     ) # output saved to local under 'data' folder: ing_cptchange_combined.parquet
     
     # Configuration
-    INPUT_FILE = "data/ing_cptchange_combined.parquet"  # Update this path
-    OUTPUT_FILE = "output/preprocessed_cpt_change_tracking.csv"
+    INPUT_FILE = fileStorage.get_path("data/ing_cptchange_combined.parquet")  # Update this path
+    OUTPUT_FILE = fileStorage.get_path("output/preprocessed_cpt_change_tracking.csv")
     
     try:
         # Step 1: Load combined parquet file

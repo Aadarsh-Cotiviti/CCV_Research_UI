@@ -14,7 +14,7 @@ from llm_wrapper import query_llm
 from pydantic import BaseModel, ValidationError, TypeAdapter
 from .utils import compute_audit_window
 from services.common.device_utils import get_or_generate_device_description
-
+from .storage import fileStorage
 
 def retrieve_knowledge(hcpcs_code, device_change_df=Path('data/preprocessed_device_code_change_tracking.csv')):
     """
@@ -28,8 +28,9 @@ def retrieve_knowledge(hcpcs_code, device_change_df=Path('data/preprocessed_devi
         Dict with knowledge base information, or None if not found
     """
     try:
+        device_change_df = fileStorage.get_path(str(device_change_df))
         # Load preprocessed device code change tracking data
-        df = pd.read_csv(device_change_df, parse_dates=['EffectiveDt', 'EndDt'])
+        df = fileStorage.read_csv(device_change_df, parse_dates=['EffectiveDt', 'EndDt'])
         
         # Filter for the specific HCPCS code
         code_records = df[df['hcpcscode'] == hcpcs_code]
@@ -234,8 +235,12 @@ def load_cached_results(target_cpt):
         
         # Extract the analysis results (excluding metadata)
         result = {
+            "service": cached_data.get("service", "section 4 - device code analysis"),
+            "update_time": cached_data.get("update_time", ""),
+            "target_cpt": cached_data.get("target_cpt", target_cpt),
             "device_codes_with_desc": cached_data.get("device_codes_with_desc", []),
             "internal_recoding_result": cached_data.get("internal_recoding_result", []),
+            "no_change_results": cached_data.get("no_change_results", []),
             "internal_llm_recoding_result": cached_data.get("internal_llm_recoding_result", []),
             "external_full_llm_result": cached_data.get("external_full_llm_result", [])
         }
@@ -309,6 +314,9 @@ def analyze_device_code_analysis(target_cpt, device_codes=None, model="gpt-4.1-m
         if not device_codes:
             print("⚠️  No device codes to analyze, returning empty results")
             empty_result = {
+                "service": "section 4 - device code analysis",
+                "update_time": datetime.datetime.now().strftime("%Y%m%d_%H%M%S"),
+                "target_cpt": target_cpt,
                 "device_codes_with_desc": [],
                 "internal_recoding_result": [],
                 "no_change_results": [],
@@ -324,12 +332,7 @@ def analyze_device_code_analysis(target_cpt, device_codes=None, model="gpt-4.1-m
             output_path = os.path.join(output_dir, file_name)
             
             with open(output_path, "w", encoding="utf-8") as f:
-                json.dump({
-                    "service": "section 4 - device code analysis",
-                    "update_time": datetime.datetime.now().strftime("%Y%m%d_%H%M%S"),
-                    "target_cpt": target_cpt,
-                    **empty_result
-                }, f, indent=2, ensure_ascii=False)
+                json.dump(empty_result, f, indent=2, ensure_ascii=False)
             
             print(f"[Saved empty results to {output_path}]")
             
@@ -401,6 +404,9 @@ def analyze_device_code_analysis(target_cpt, device_codes=None, model="gpt-4.1-m
         print(f"[Saved findings to {output_path}]")
         
         return {
+            "service": "section 4 - device code analysis",
+            "update_time": dt_str,
+            "target_cpt": target_cpt,
             "device_codes_with_desc": device_codes_with_desc,
             "internal_recoding_result": kb_results,
             "no_change_results": no_change_results,
@@ -413,6 +419,9 @@ def analyze_device_code_analysis(target_cpt, device_codes=None, model="gpt-4.1-m
         import traceback
         traceback.print_exc()
         return {
+            "service": "section 4 - device code analysis",
+            "update_time": datetime.datetime.now().strftime("%Y%m%d_%H%M%S"),
+            "target_cpt": target_cpt,
             "device_codes_with_desc": [],
             "internal_recoding_result": [],
             "no_change_results": [],

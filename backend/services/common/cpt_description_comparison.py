@@ -7,7 +7,7 @@ This module compares CPT code descriptions between 2025 and 2026 to identify cha
 import os
 import pandas as pd
 from typing import Tuple, Dict
-
+from ..storage import fileStorage
 
 def load_cpt_descriptions(file_path: str, year: str) -> pd.DataFrame:
     """
@@ -20,11 +20,11 @@ def load_cpt_descriptions(file_path: str, year: str) -> pd.DataFrame:
     Returns:
         DataFrame with CPT codes and descriptions
     """
-    if not os.path.exists(file_path):
+    if not fileStorage.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
     
     # Read first sheet
-    df = pd.read_excel(file_path, sheet_name=0)
+    df = pd.read_excel(fileStorage.read_bytes(file_path), sheet_name=0)
     
     print(f"📄 Loading {year} CPT descriptions from: {file_path}")
     print(f"   Columns found: {df.columns.tolist()}")
@@ -147,19 +147,14 @@ def analyze_cpt_description_changes(
     """
     # Default paths
     if file_2025 is None:
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        file_2025 = os.path.join(base_dir, 'data', 'CPT Codes with Long Descriptions 2025.xlsx')
+        file_2025 = fileStorage.get_path('data', 'CPT Codes with Long Descriptions 2025.xlsx')
     
     if file_2026 is None:
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        file_2026 = os.path.join(base_dir, 'data', 'CPT Codes with Long Descriptions 2026.xlsx')
+        file_2026 = fileStorage.get_path('data', 'CPT Codes with Long Descriptions 2026.xlsx')
     
     if output_dir is None:
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        output_dir = os.path.join(base_dir, 'output', '2025_2026_cpt_changes')
+        output_dir = fileStorage.get_path('output', '2025_2026_cpt_changes')
     
-    # Create output directory
-    os.makedirs(output_dir, exist_ok=True)
     
     print("=" * 80)
     print("CPT Code Description Comparison Analysis (2025 vs 2026)")

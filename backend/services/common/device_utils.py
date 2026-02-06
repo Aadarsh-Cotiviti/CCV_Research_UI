@@ -8,10 +8,10 @@ import pandas as pd
 import os
 from pathlib import Path
 from llm_wrapper import query_llm
-
+from ..storage import fileStorage
 
 # CSV cache file path
-HCPCS_CSV_PATH = "data/hcpcs_codes_all.csv"
+HCPCS_CSV_PATH = fileStorage.get_path("data","hcpcs_codes_all.csv")
 
 
 def _preprocess_hcpcs_data():
@@ -72,8 +72,8 @@ def _preprocess_hcpcs_data():
         print(f"🔍 Total records with valid dates: {len(df_filtered)}")
         
         # Save to CSV
-        os.makedirs("data", exist_ok=True)
-        df_filtered.to_csv(HCPCS_CSV_PATH, index=False, encoding='utf-8')
+        fileStorage.write_csv(HCPCS_CSV_PATH, df_filtered, index=False, encoding='utf-8')
+        # df_filtered.to_csv(HCPCS_CSV_PATH, index=False, encoding='utf-8')
         
         print(f"💾 Saved to: {HCPCS_CSV_PATH}")
         print(f"   File size: {os.path.getsize(HCPCS_CSV_PATH) / 1024:.2f} KB")

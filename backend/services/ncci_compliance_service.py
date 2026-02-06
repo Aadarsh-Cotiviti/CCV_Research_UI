@@ -8,6 +8,7 @@ import os
 import sys
 import json
 import datetime
+import io
 import pandas as pd
 from pathlib import Path
 from .utils import compute_audit_window
@@ -15,7 +16,7 @@ from llm_wrapper import query_llm
 from services.data_preprocessing.ptp_table_preprocessing import download_ptp_table_from_s3, clean_column_names, subset_save_df
 from services.code_description_service import load_cached_results as load_section1_cache, get_neighboring_codes_prompt
 from services.common import get_or_generate_cpt_description
-
+from .storage import fileStorage
 # Add project root and ncci_rag/src to path for ncci_rag import
 project_root = Path(__file__).parent.parent
 ncci_rag_src = project_root / "ncci_rag" / "src"
@@ -88,8 +89,8 @@ def filter_ptp_tables_by_cpts(cpt_codes):
     """
     print(f"\n📊 Loading and filtering PTP Edit Tables for {len(cpt_codes)} CPT code(s)...")
     
-    modifier_0_path = "data/preprocessed_ptp_edit_table_modifier0.csv"
-    modifier_1_path = "data/preprocessed_ptp_edit_table_modifier1.csv"
+    modifier_0_path = fileStorage.get_path("data","preprocessed_ptp_edit_table_modifier0.csv")
+    modifier_1_path = fileStorage.get_path("data","preprocessed_ptp_edit_table_modifier1.csv")
     
     results = {}
     
@@ -98,8 +99,8 @@ def filter_ptp_tables_by_cpts(cpt_codes):
         df_mod0 = None
         df_mod1 = None
         
-        if os.path.exists(modifier_0_path):
-            df_mod0 = pd.read_csv(modifier_0_path)
+        if fileStorage.exists(modifier_0_path):
+            df_mod0 = pd.read_csv(fileStorage.read_bytes(modifier_0_path))
             # Convert CPT code columns to string for consistent comparison
             df_mod0['CPT_code_1'] = df_mod0['CPT_code_1'].astype(str)
             df_mod0['CPT_code_2'] = df_mod0['CPT_code_2'].astype(str)
@@ -108,13 +109,13 @@ def filter_ptp_tables_by_cpts(cpt_codes):
             df = download_ptp_table_from_s3()
             df_cleaned = clean_column_names(df)
             subset_save_df(df_cleaned)
-            if os.path.exists(modifier_0_path):
-                df_mod0 = pd.read_csv(modifier_0_path)
+            if fileStorage.exists(modifier_0_path):
+                df_mod0 = pd.read_csv(fileStorage.read_bytes(modifier_0_path))
                 df_mod0['CPT_code_1'] = df_mod0['CPT_code_1'].astype(str)
                 df_mod0['CPT_code_2'] = df_mod0['CPT_code_2'].astype(str)
         
-        if os.path.exists(modifier_1_path):
-            df_mod1 = pd.read_csv(modifier_1_path)
+        if fileStorage.exists(modifier_1_path):
+            df_mod1 = pd.read_csv(fileStorage.read_bytes(modifier_1_path))
             # Convert CPT code columns to string for consistent comparison
             df_mod1['CPT_code_1'] = df_mod1['CPT_code_1'].astype(str)
             df_mod1['CPT_code_2'] = df_mod1['CPT_code_2'].astype(str)

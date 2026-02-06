@@ -10,7 +10,7 @@ import os
 import boto3
 from io import BytesIO
 from pathlib import Path
-
+from ..storage import fileStorage
 
 def download_ptp_table_from_s3():
     """
@@ -123,8 +123,8 @@ def subset_save_df(df):
     print("\n💾 Subsetting and saving PTP edit data...")
     output_dir = Path("output")
     os.makedirs(output_dir, exist_ok=True)
-    modifier_0_filename = "output/preprocessed_ptp_edit_table_modifier0.csv"
-    modifier_1_filename = "output/preprocessed_ptp_edit_table_modifier1.csv"
+    modifier_0_filename = fileStorage.get_path("data", "preprocessed_ptp_edit_table_modifier0.csv")
+    modifier_1_filename = fileStorage.get_path("data", "preprocessed_ptp_edit_table_modifier1.csv")
    
     # Convert Effective_Date to numeric for comparison if it's not already
     # Ensure proper date comparison (20230101 format)
@@ -138,8 +138,8 @@ def subset_save_df(df):
     print(f"   Modifier 1 (allowed): {len(modifier_1_df)} records")
     
     # Save to CSV
-    modifier_0_df.to_csv(modifier_0_filename, index=False)
-    modifier_1_df.to_csv(modifier_1_filename, index=False)
+    fileStorage.write_csv(modifier_0_filename, modifier_0_df)
+    fileStorage.write_csv(modifier_1_filename, modifier_1_df)
     
     print(f"✅ Saved Modifier 0 data to: {modifier_0_filename}")
     print(f"✅ Saved Modifier 1 data to: {modifier_1_filename}")

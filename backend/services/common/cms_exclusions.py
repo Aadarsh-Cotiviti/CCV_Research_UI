@@ -7,7 +7,7 @@ import os
 import pandas as pd
 import re
 from typing import Dict, List, Tuple
-
+from ..storage import fileStorage
 
 def parse_cpt_code_range(code_str: str) -> List[str]:
     """
@@ -78,14 +78,13 @@ def load_cms_exclusions_data(
     """
     # Default path
     if excel_path is None:
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        excel_path = os.path.join(base_dir, 'data', 'cms_exclusions.xlsx')
+        excel_path = fileStorage.get_path('data', 'cms_exclusions.xlsx')
     
-    if not os.path.exists(excel_path):
+    if not fileStorage.exists(excel_path):
         raise FileNotFoundError(f"CMS exclusions file not found: {excel_path}")
     
     # Load all sheets into a dictionary of DataFrames
-    xls = pd.ExcelFile(excel_path)
+    xls = pd.ExcelFile(fileStorage.read_bytes(excel_path))
     data = {sheet_name: xls.parse(sheet_name) for sheet_name in xls.sheet_names}
     
     return data

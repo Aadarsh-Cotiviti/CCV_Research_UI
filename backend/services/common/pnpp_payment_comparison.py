@@ -11,7 +11,7 @@ import pandas as pd
 import re
 from typing import Dict, List, Tuple
 from .cms_exclusions import get_exclusions_for_cpt_list
-
+from ..storage import fileStorage
 
 # Expected columns to extract from each sheet
 REQUIRED_COLUMNS = ['HCPCS', 'STATUS CODE', 'NON-FACILITY TOTAL', 'FACILITY TOTAL', 'CONV FACTOR']
@@ -67,12 +67,12 @@ def filter_years(sheet_names: List[str], start_year: int = 2024, end_year: int =
     return filtered
 
 
-def detect_header_row(excel_path: str, sheet_name: str, max_rows: int = 20) -> int:
+def detect_header_row(excel_bytes: bytes, sheet_name: str, max_rows: int = 20) -> int:
     """
     Detect the row number where the actual table header is located
     
     Args:
-        excel_path: Path to Excel file
+        excel_bytes: Bytes content of Excel file
         sheet_name: Sheet name to analyze
         max_rows: Maximum rows to search for header (default: 20)
         
@@ -80,7 +80,7 @@ def detect_header_row(excel_path: str, sheet_name: str, max_rows: int = 20) -> i
         Row number (0-indexed) where header is found, or 0 if not found
     """
     # Read first few rows without header to inspect
-    df_peek = pd.read_excel(excel_path, sheet_name=sheet_name, header=None, nrows=max_rows)
+    df_peek = pd.read_excel(excel_bytes, sheet_name=sheet_name, header=None, nrows=max_rows)
     
     # Look for row containing the required column names
     for idx, row in df_peek.iterrows():
@@ -122,16 +122,17 @@ def load_payment_data(
     """
     # Default path
     if excel_path is None:
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        excel_path = os.path.join(base_dir, 'data', 'pnpp_fee_schedule.xlsx')
+        # base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        # excel_path = os.path.join(base_dir, 'data', 'pnpp_fee_schedule.xlsx')
+        excel_path = fileStorage.get_path("data","pnpp_fee_schedule.xlsx")
     
-    if not os.path.exists(excel_path):
+    if not fileStorage.exists(excel_path):
         raise FileNotFoundError(f"Payment data file not found: {excel_path}")
     
     print(f"📊 Loading payment data from: {excel_path}")
     
     # Read all sheet names
-    excel_file = pd.ExcelFile(excel_path)
+    excel_file = pd.ExcelFile(fileStorage.read_bytes(excel_path))
     all_sheets = excel_file.sheet_names
     print(f"   Found {len(all_sheets)} total sheets")
     
@@ -145,10 +146,10 @@ def load_payment_data(
     for sheet_name in target_sheets:
         try:
             # Detect where the actual table starts
-            header_row = detect_header_row(excel_path, sheet_name)
+            header_row = detect_header_row(fileStorage.read_bytes(excel_path), sheet_name)
             
             # Read the sheet with correct header row
-            df = pd.read_excel(excel_path, sheet_name=sheet_name, header=header_row)
+            df = pd.read_excel(fileStorage.read_bytes(excel_path), sheet_name=sheet_name, header=header_row)
             
             # Clean column names (strip whitespace)
             df.columns = df.columns.str.strip()

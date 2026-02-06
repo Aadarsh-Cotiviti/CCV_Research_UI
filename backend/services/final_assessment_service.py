@@ -25,9 +25,10 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from .utils import compute_audit_window
 from llm_wrapper import query_llm
+from .storage import fileStorage
 
 # Output directory for generated reports
-OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output")
+OUTPUT_DIR = fileStorage.get_path("output")
 
 
 def summarize_ncci_manual_sections(cpt_code, full_analysis):
@@ -131,17 +132,16 @@ def load_section_results(target_cpt, section_num):
     Returns:
         Dict with section results, or None if not found
     """
-    output_dir = f"output/services_findings/{target_cpt}"
+    output_dir = fileStorage.get_path("output","services_findings", target_cpt)
     file_name = f"section_{section_num}_results.json"
-    file_path = os.path.join(output_dir, file_name)
+    file_path = fileStorage.get_path(output_dir, file_name)
     
-    if not os.path.exists(file_path):
+    if not fileStorage.exists(file_path):
         print(f"⚠️  Section {section_num} results not found. Please run Sections 1-6 analysis first before generating final assessment.")
         return None
     
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        data = fileStorage.read_json(file_path)
         print(f"✅ Loaded Section {section_num} results from {file_path}")
         return data
     except Exception as e:

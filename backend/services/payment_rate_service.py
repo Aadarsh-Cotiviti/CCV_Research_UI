@@ -334,7 +334,7 @@ def analyze_payment_rate_comparison(target_cpt, model="gpt-4.1-mini", use_cache=
         payment_history_json = {}
         for payment_type in ['apc', 'asc', 'pnpp']:
             payment_history_json[payment_type] = {
-                k: v for k, v in payment_history_dict[payment_type].items() 
+                k: v for k, v in payment_history_dict[payment_type].items()
                 if k != 'data_filtered_df'
             }
         payment_history_json['source'] = payment_history_dict['source']
@@ -357,7 +357,7 @@ def analyze_payment_rate_comparison(target_cpt, model="gpt-4.1-mini", use_cache=
         
         return {
             "analysis_content": analysis_result,
-            "target_cpt_payment_history": payment_history_dict,
+            "target_cpt_payment_history": payment_history_json,
             "cpt_descriptions": cpt_descriptions,
             "source": "llm"
         }

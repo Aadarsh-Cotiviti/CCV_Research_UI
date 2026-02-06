@@ -33,9 +33,7 @@ from llm_wrapper import query_llm, stream_llm
 from services import apc_orchestrator
 from services.cpt_service import get_cpt_codes_for_topic
 from services.utils import (
-    get_chat_history,
     get_research_session,
-    save_chat_message,
 )
 from services.common import get_or_generate_cpt_description
 from services.final_assessment_service import create_excel_output, create_pdf_output, generate_final_assessment

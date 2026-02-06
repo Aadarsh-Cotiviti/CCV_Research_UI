@@ -3,8 +3,6 @@ from datetime import datetime, timedelta
 from llm_wrapper import query_llm
 import pandas as pd
 from io import BytesIO
-import json
-import html
 import sqlite3
 import os
 from reportlab.lib.pagesizes import letter
@@ -12,6 +10,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from services.storage import fileStorage
 
 # Global variable to cache CPT descriptions
 _cpt_descriptions_cache = None
@@ -24,14 +23,16 @@ def load_cpt_descriptions():
         return _cpt_descriptions_cache
     
     try:
-        xlsx_path = os.path.join(os.path.dirname(__file__), "CPT Codes with Long Descriptions 2025.xlsx")
+
+        xlsx_path = fileStorage.get_path("data","CPT Codes with Long Descriptions 2025.xlsx")
         
-        if not os.path.exists(xlsx_path):
+        if not fileStorage.exists(xlsx_path):
             # File doesn't exist, return empty dict silently
             _cpt_descriptions_cache = {}
             return _cpt_descriptions_cache
         
-        df = pd.read_excel(xlsx_path)
+        
+        df = pd.read_excel(fileStorage.read_bytes(xlsx_path))
         
         # Create a dictionary mapping CPT code to description
         # Convert CPT codes to strings and strip whitespace

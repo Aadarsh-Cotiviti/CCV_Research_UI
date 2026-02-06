@@ -113,7 +113,6 @@ export const StartResearchButton: FC<ButtonHTMLAttributes<HTMLButtonElement>> = 
       const message =
         err instanceof Error ? err.message : "Failed to start research. Please try again.";
       setError(message);
-    } finally {
       setLoading(false);
     }
   };

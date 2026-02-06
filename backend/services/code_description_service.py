@@ -14,7 +14,8 @@ from llm_wrapper import query_llm
 from pydantic import BaseModel, Field, ValidationError
 from .utils import compute_audit_window
 from services.common import get_or_generate_cpt_description
-
+from .storage import fileStorage
+ 
 def retrieve_knowledge(cpt_code, cpt_change_df=Path('data/preprocessed_cpt_change_tracking.csv')):
     """
     Retrieve CPT code changes (new or changed codes) for the past 3 years from local knowledge base.
@@ -26,8 +27,9 @@ def retrieve_knowledge(cpt_code, cpt_change_df=Path('data/preprocessed_cpt_chang
         Dict with knowledge base information, or None if not found
     """
     try:
+        cpt_change_df = fileStorage.get_path(str(cpt_change_df))
         # Load preprocessed CPT change tracking data
-        cpt_df = pd.read_csv(cpt_change_df, parse_dates=['EffectiveDt', 'EndDt'])
+        cpt_df = fileStorage.read_csv(cpt_change_df, parse_dates=['EffectiveDt', 'EndDt'])
         
         # Convert cpt_code to int for comparison (CSV stores as int64)
         try:
@@ -190,11 +192,19 @@ def load_cached_results(target_cpt):
             cached_data = json.load(f)
         
         # Extract the analysis results (excluding metadata)
+        external_full_llm_result = cached_data.get("external_full_llm_result", [])
+        if not isinstance(external_full_llm_result, list):
+            external_full_llm_result = []
+        internal_llm_recoding_result = cached_data.get("internal_llm_recoding_result", [])
+        if not isinstance(internal_llm_recoding_result, list):
+            internal_llm_recoding_result = []
+
         result = {
             "neighbouring_codes": cached_data.get("neighbouring_codes", []),
             "internal_recoding_result": cached_data.get("internal_recoding_result", []),
-            "internal_llm_recoding_result": cached_data.get("internal_llm_recoding_result", []),
-            "external_full_llm_result": cached_data.get("external_full_llm_result", "")
+            "no_change_results": cached_data.get("no_change_results", []),
+            "internal_llm_recoding_result": internal_llm_recoding_result,
+            "external_full_llm_result": external_full_llm_result,
         }
         
         print(f"✅ Loaded cached results from {output_path}")
@@ -322,7 +332,9 @@ def analyze_code_descriptions(target_cpt, model="gpt-4.1-mini", use_cache=True):
             "update_time": dt_str,
             "neighbouring_codes": neighbouring_codes_with_desc,
             "internal_recoding_result": kb_results,
-            "no_change_results": no_change_results
+            "no_change_results": no_change_results,
+            "internal_llm_recoding_result": internal_llm_recoding_results,
+            "external_full_llm_result": external_full_llm_result,
         }
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(result_obj, f, ensure_ascii=False, indent=2)
