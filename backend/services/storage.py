@@ -2,7 +2,6 @@ import os
 import io
 import json
 import logging
-import posixpath
 
 
 class FileStorage:
@@ -22,32 +21,10 @@ class FileStorage:
             from databricks.sdk import WorkspaceClient
 
             self._client = WorkspaceClient()
-            raw_base = os.getenv("VOLUME_PATH", "")
-            self._base = self._normalize_databricks_base(raw_base)
+            self._base = os.getenv("VOLUME_PATH", "").rstrip("/")
         else:
             self._base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         print(f"FileStorage initialized. Using Databricks: {self.use_databricks} Base path: {self._base}")
-
-    def _normalize_databricks_base(self, base: str) -> str:
-        """Normalize Databricks base path for Files API usage."""
-        base = (base or "").strip().rstrip("/")
-        if not base:
-            return base
-
-        if base.startswith("dbfs:/"):
-            return "/dbfs/" + base[len("dbfs:/"):]
-
-        if base.startswith("/"):
-            return base
-
-        if base.lower().startswith("volumes/"):
-            return "/" + base
-
-        self._logger.info(
-            "VOLUME_PATH is not absolute. Using as-is: %s",
-            base,
-        )
-        return base
 
     def _log_file_action(self, function_name: str, path: str) -> None:
         self._logger.info("%s: %s", function_name, path)
@@ -55,7 +32,7 @@ class FileStorage:
     def _log_file_error(self, function_name: str, path: str, error: Exception) -> None:
         self._logger.exception("%s failed: %s", function_name, path, exc_info=error)
 
-    def _log_file_content(self, function_name: str, path: str, content: str, max_chars: int = 200) -> None:
+    def _log_file_content(self, function_name: str, path: str, content: str, max_chars: int = 1000) -> None:
         if content is None:
             return
         preview = content if len(content) <= max_chars else f"{content[:max_chars]}...<truncated>"
@@ -63,10 +40,10 @@ class FileStorage:
 
     def get_path(self, *path_parts: str) -> str:
         """Get full path in the storage system"""
+        relative_path = os.path.join(*path_parts)
         if self.use_databricks:
-            return posixpath.join(self._base, *path_parts)
+            return f"/{self._base}/{relative_path}"
         else:
-            relative_path = os.path.join(*path_parts)
             return os.path.join(self._base, relative_path)
 
     def exists(self, path: str) -> bool:
@@ -113,14 +90,10 @@ class FileStorage:
                 resp = self._client.files.download(path)
                 if resp.contents is None:
                     raise FileNotFoundError(f"File not found in Databricks: {path}")
-                data = resp.contents.read()
-                self._log_file_content("read_bytes", path, data.decode("utf-8", errors="replace"))
-                return io.BytesIO(data)
+                return io.BytesIO(resp.contents.read())
             else:
                 with open(path, "rb") as f:
-                    data = f.read()
-                    self._log_file_content("read_bytes", path, data.decode("utf-8", errors="replace"))
-                    return io.BytesIO(data)
+                    return io.BytesIO(f.read())
         except Exception as exc:
             self._log_file_error("read_bytes", path, exc)
             raise
