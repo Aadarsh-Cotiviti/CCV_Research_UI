@@ -43,11 +43,11 @@ class FileStorage:
         if base.lower().startswith("volumes/"):
             return "/" + base
 
-        self._logger.warning(
-            "VOLUME_PATH is not absolute. Prefixing with /Volumes/: %s",
+        self._logger.info(
+            "VOLUME_PATH is not absolute. Using as-is: %s",
             base,
         )
-        return "/Volumes/" + base
+        return base
 
     def _log_file_action(self, function_name: str, path: str) -> None:
         self._logger.info("%s: %s", function_name, path)
